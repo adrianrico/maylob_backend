@@ -192,7 +192,7 @@ var controller = {
      */
     updateManeuver: async function(req, res)
     {
-        auxFuncModule.logger("updateManeuver",1)
+        auxFuncModule.logger("updateManeuver_195",1)
 
         /** - Step [1]
          *  - Receive filter values from client request...
@@ -202,46 +202,77 @@ var controller = {
 
         if (!auxFuncModule.isValidValue(bodyValues.maneuver_id)) 
         {
-            auxFuncModule.logger("updateManeuver",3,1)
+            auxFuncModule.logger("updateManeuver_205",3,1)
             return res.status(200).send({message:'0'}) 
         }else
         {
-            auxFuncModule.logger("updateManeuver",2,1)
-           
+            auxFuncModule.logger("updateManeuver_209",2,1)
+
             /** - Step [2]
-             *  - Update maneuver in DB...
+             *  - Search maneuver in the DB...
              */
-            let event = [bodyValues.maneuver_event_time,bodyValues.maneuver_current_location,bodyValues.maneuver_current_status,bodyValues.maneuver_completion] 
-           
-            await maneuverModelItem.findOneAndUpdate(
-                { maneuver_id:bodyValues.maneuver_id }, // Search Filter...
+            await maneuverModelItem.find({maneuver_id:bodyValues.maneuver_id}).then((foundManeuver)=>
+            {   
+
+                if (foundManeuver.length <= 0)
                 {
-                    // Update loop...
-                    $push:{maneuver_events:{$each:event}},
-                    $set:
-                    {
-                        maneuver_current_location:bodyValues.maneuver_current_location,
-                        maneuver_current_status:bodyValues.maneuver_current_status
-                    }
-                }, 
-                {new:true}
-            )
-            .then((updatedManeuver) =>
-            {
-                if(!updatedManeuver)
-                {
-                    auxFuncModule.logger("updateManeuver",3,2)
-                    return res.status(200).send({message:'0'})       
+                    auxFuncModule.logger("updateManeuver_219",3,2)
+                    return res.status(200).send({message:'0'})
                 }else
                 {
-                         auxFuncModule.logger("updateManeuver",2,2)
-                    return res.status(200).send({updatedManeuver})
-                }                   
+                    auxFuncModule.logger("updateManeuver_223",2,2)
+
+                    let eventsFound = foundManeuver[0].maneuver_events.length;
+                    let event       = [bodyValues.maneuver_event_time,bodyValues.maneuver_current_location,bodyValues.maneuver_current_status,bodyValues.maneuver_completion] 
+
+                    for (let index = 0; index <= eventsFound; index++) 
+                    {
+                        if(foundManeuver[0].maneuver_events[(index*4)+1] === bodyValues.maneuver_current_location && foundManeuver[0].maneuver_events[(index*4)+2] === bodyValues.maneuver_current_status) 
+                        {
+                            //console.log(foundManeuver[0].maneuver_events[(index*4)+1],foundManeuver[0].maneuver_events[(index*4)+2]);
+                            return res.status(200).send({message:'event already saved...'})
+                        }else
+                        {
+                            if (index+1 === eventsFound) 
+                            {
+                                maneuverModelItem.findOneAndUpdate(
+                                    { maneuver_id:bodyValues.maneuver_id }, // Search Filter...
+                                    {
+                                    // Update loop...
+                                    $push:{maneuver_events:{$each:event}},
+                                    $set:
+                                        {
+                                            maneuver_current_location:bodyValues.maneuver_current_location,
+                                            maneuver_current_status:bodyValues.maneuver_current_status
+                                        }
+                                    }, 
+                                    {new:true}
+                                )
+                                .then((updatedManeuver) =>
+                                {
+                                    if(!updatedManeuver)
+                                    {
+                                        auxFuncModule.logger("updateManeuver_255",3,2)
+                                        return res.status(200).send({message:'0'})       
+                                    }else
+                                    {
+                                        auxFuncModule.logger("updateManeuver_259",2,2)
+                                        return res.status(200).send({updatedManeuver})
+                                    }                   
+                                }).catch((err)=>
+                                {
+                                    auxFuncModule.logger("updateManeuver_264",5,2)+err
+                                    return res.status(200).send({message:'0'})  
+                                }) 
+                            }
+                        }
+                    }
+                }
             }).catch((err)=>
             {
-                auxFuncModule.logger("updateManeuver",3,2)+err
+                auxFuncModule.logger("updateManeuver_273",5,2)+err
                 return res.status(200).send({message:'0'})  
-            }) 
+            })
         } 
     },
 
