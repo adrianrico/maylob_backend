@@ -140,7 +140,7 @@ var controller = {
 
 
 
-    /** [ FIND MANEUVER BY ID ]
+    /** [ FIND MANEUVER BY MANEUVER ID OR CONTAINERS ID]
      * @param {*} req 
      * @param {*} res
      */
@@ -149,36 +149,63 @@ var controller = {
         auxFuncModule.logger("findManeuver",1)
     
         /** - Step [1]
-         *  - get maneuver ID from client request...
+         *  - get searching value from client...
+         *  - [A] = By maneuver ID...
+         *  - [B] = By any given container ID...
          *  - via GET -> URL PARAMETER
          */
         let searchingValue = Object.keys(req.query);
 
         if(!auxFuncModule.isValidValue(searchingValue))
         {
-            auxFuncModule.logger("findManeuver",3,1)
+            auxFuncModule.logger("findManeuver_161",3,1)
             return res.status(200).send({message:'0'})
         }else
         {
             /** - Step [2]
              *  - Search maneuver in the DB...
              */
-            await maneuverModelItem.find({maneuver_id:searchingValue}).then((foundManeuver)=>
-            {   
-                if (foundManeuver.length <= 0)
-                {
-                    auxFuncModule.logger("findManeuver",3,2)
-                    return res.status(200).send({message:'0'})
-                }else
-                {
-                    auxFuncModule.logger("findManeuver",2,2)
-                    return res.status(200).send({foundManeuver})    
-                }
-            }).catch((err)=>
+
+            switch (searchingValue[0].length) 
             {
-                auxFuncModule.logger("findManeuver",3,2)+err
-                return res.status(200).send({message:'0'})  
-            })
+                case 13:
+                    await maneuverModelItem.find({maneuver_id:searchingValue}).then((foundManeuver)=>
+                    {   
+                        if (foundManeuver.length <= 0)
+                        {
+                            auxFuncModule.logger("findManeuver_176",3,2)
+                            return res.status(200).send({message:'0'})
+                        }else
+                        {
+                            auxFuncModule.logger("findManeuver",2,2)
+                            return res.status(200).send({foundManeuver})    
+                        }
+                    }).catch((err)=>
+                    {
+                        auxFuncModule.logger("findManeuver_185",3,2)+err
+                        return res.status(200).send({message:'0'})  
+                    })
+                break;
+
+                case 11:
+                    await maneuverModelItem.find({maneuver_containers:searchingValue[0]}).then((foundManeuver)=>
+                    {   
+                        if (foundManeuver.length <= 0)
+                        {
+                            auxFuncModule.logger("findManeuver_195",3,2)
+                            return res.status(200).send({message:'0'})
+                        }else
+                        {
+                            auxFuncModule.logger("findManeuver",2,2)
+                            return res.status(200).send({foundManeuver})    
+                        }
+                    }).catch((err)=>
+                    {
+                        auxFuncModule.logger("findManeuver_204",5,2)+err
+                        return res.status(200).send({message:'0'})  
+                    })
+                break;
+            }
         }
     },
     
