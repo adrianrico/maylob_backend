@@ -1,15 +1,14 @@
 'use strict'
 
-/** Import MODEL SCHEMA from models MODULE...*/
-var maneuverModelItem   = require('../MODELS/maneuver.js')
+//Import required MODEL SCHEMAS from models MODULE...
+var maneuverModelItem  = require('../MODELS/maneuver.js')
+let transportModelItem = require('../MODELS/transporter.js') 
+let objectModelItem    = require('../MODELS/object.js') 
 
-/** Import MODEL SCHEMA from models MODULE...*/
-let objectModelItem = require('../MODELS/object.js') 
-
-/** Import auxiliary functions MODULE... */
+// Import auxiliary functions MODULE...
 let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
 
-/** All controllers logic definition and implementation... */
+// All controllers logic definition and implementation...
 var controller = {
 
     /** [ ADD MANEUVER ]
@@ -395,42 +394,7 @@ var controller = {
 
 
 
-
-
-    /** [ GET AVAILABLE MANEUVERS ]
-     * @param {*} req 
-     * @param {*} res
-     */
-    getAllManeuvers: async function(req, res)
-    {
-        auxFuncModule.logger("getAllManeuvers",1)
-
-        /** - Step [1]
-         *  - Search for available and not requested objects...
-         */
-
-        await maneuverModelItem.find({}).then((objectsFound)=>
-        {
-            if(objectsFound.length === 0)
-            {
-                auxFuncModule.logger("getAllManeuvers",3,1)    
-                return res.status(200).send({message:'0'})
-            }else
-            {
-                auxFuncModule.logger("getAllManeuvers",2,1)
-                return res.status(200).send({objectsFound})
-            }
-
-        }).catch((err)=>
-        {
-            auxFuncModule.logger("getAllManeuvers",3,1)+err
-            return res.status(200).send({message:'0'})  
-        })
-    },
     
-
-
-
 
     /** [ UPDATE MANEUVER GPS ]
      * @param {*} req 
@@ -526,6 +490,567 @@ var controller = {
             }
         },
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+//#region [ v1.1 CONTROLLER ]
+
+    /** [ SAVE NEW MANEUVER ]
+    * @param {*} req 
+    * @param {*} res
+    */    
+    saveNewManeuver: async function(req,res)
+    {
+        auxFuncModule.logger("saveNewManeuver -> LN 516",1)
+
+        /* - Step [1]
+        *  - Receive values from CLIENT and validate them...
+        *  - via POST -> BODY
+        */
+
+        let newManeuverObject = new maneuverModelItem()
+        let bodyValues        = req.body  
+
+        // Block 1 data...
+        newManeuverObject.man_cliente   = auxFuncModule.isValidValue(bodyValues.man_cliente)   ? bodyValues.man_cliente.toUpperCase()   : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_modalidad = auxFuncModule.isValidValue(bodyValues.man_modalidad) ? bodyValues.man_modalidad.toUpperCase() : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_despacho  = auxFuncModule.isValidValue(bodyValues.man_despacho)  ? bodyValues.man_despacho.toUpperCase()  : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_aa        = auxFuncModule.isValidValue(bodyValues.man_aa)        ? bodyValues.man_aa.toUpperCase()        : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_ejecutiva = auxFuncModule.isValidValue(bodyValues.man_ejecutiva) ? bodyValues.man_ejecutiva.toUpperCase() : 'DATO NO ASIGNADO' ,
+
+        // Block 2 data...
+        newManeuverObject.man_terminal               = auxFuncModule.isValidValue(bodyValues.man_terminal)               ? bodyValues.man_terminal.toUpperCase()               : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_descarga               = auxFuncModule.isValidValue(bodyValues.man_descarga)               ? bodyValues.man_descarga.toUpperCase()               : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_descarga_extraLocation = auxFuncModule.isValidValue(bodyValues.man_descarga_extraLocation) ? bodyValues.man_descarga_extraLocation.toUpperCase() : 'DATO NO ASIGNADO' ,
+        
+        // Block 3 data...
+        newManeuverObject.man_transportista = auxFuncModule.isValidValue(bodyValues.man_transportista) ? bodyValues.man_transportista.toUpperCase() : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.man_eco           = auxFuncModule.isValidValue(bodyValues.man_eco)           ? bodyValues.man_eco.toUpperCase()           : 'DATO NO ASIGNADO' ,
+        newManeuverObject.man_operador      = auxFuncModule.isValidValue(bodyValues.man_operador)      ? bodyValues.man_operador.toUpperCase()      : 'DATO NO ASIGNADO' , 
+        newManeuverObject.man_gpsLink       = auxFuncModule.isValidValue(bodyValues.man_gpsLink)       ? bodyValues.man_gpsLink.toUpperCase()       : 'DATO NO ASIGNADO' ,     
+  
+        // Block 4...
+        newManeuverObject.manCont_1_id        = auxFuncModule.isValidValue(bodyValues.manCont_1_id)        ? bodyValues.manCont_1_id.toUpperCase()        : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_1_size      = auxFuncModule.isValidValue(bodyValues.manCont_1_size)      ? bodyValues.manCont_1_size.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_1_contenido = auxFuncModule.isValidValue(bodyValues.manCont_1_contenido) ? bodyValues.manCont_1_contenido.toUpperCase() : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_1_peso      = auxFuncModule.isValidValue(bodyValues.manCont_1_peso)      ? bodyValues.manCont_1_peso.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_1_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_1_tipo)      ? bodyValues.manCont_1_tipo.toUpperCase()      : 'DATO NO ASIGNADO' ,  
+
+        // Block 5...
+        newManeuverObject.manCont_2_id        = auxFuncModule.isValidValue(bodyValues.manCont_2_id)        ? bodyValues.manCont_2_id.toUpperCase()        : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_2_size      = auxFuncModule.isValidValue(bodyValues.manCont_2_size)      ? bodyValues.manCont_2_size.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_2_contenido = auxFuncModule.isValidValue(bodyValues.manCont_2_contenido) ? bodyValues.manCont_2_contenido.toUpperCase() : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_2_peso      = auxFuncModule.isValidValue(bodyValues.manCont_2_peso)      ? bodyValues.manCont_2_peso.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_2_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_2_tipo)      ? bodyValues.manCont_2_tipo.toUpperCase()      : 'DATO NO ASIGNADO' ,  
+
+        // Block 6...
+        newManeuverObject.manCont_3_id        = auxFuncModule.isValidValue(bodyValues.manCont_3_id)        ? bodyValues.manCont_3_id.toUpperCase()        : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_3_size      = auxFuncModule.isValidValue(bodyValues.manCont_3_size)      ? bodyValues.manCont_3_size.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_3_contenido = auxFuncModule.isValidValue(bodyValues.manCont_3_contenido) ? bodyValues.manCont_3_contenido.toUpperCase() : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_3_peso      = auxFuncModule.isValidValue(bodyValues.manCont_3_peso)      ? bodyValues.manCont_3_peso.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_3_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_3_tipo)      ? bodyValues.manCont_3_tipo.toUpperCase()      : 'DATO NO ASIGNADO' ,  
+
+        // Block 7...
+        newManeuverObject.manCont_4_id        = auxFuncModule.isValidValue(bodyValues.manCont_4_id)        ? bodyValues.manCont_4_id.toUpperCase()        : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_4_size      = auxFuncModule.isValidValue(bodyValues.manCont_4_size)      ? bodyValues.manCont_4_size.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_4_contenido = auxFuncModule.isValidValue(bodyValues.manCont_4_contenido) ? bodyValues.manCont_4_contenido.toUpperCase() : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_4_peso      = auxFuncModule.isValidValue(bodyValues.manCont_4_peso)      ? bodyValues.manCont_4_peso.toUpperCase()      : 'DATO NO ASIGNADO' ,    
+        newManeuverObject.manCont_4_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_4_tipo)      ? bodyValues.manCont_4_tipo.toUpperCase()      : 'DATO NO ASIGNADO' 
+
+        // Build initial default values...
+        const dateTime = new Date()
+        const event_time = dateTime.getDate()
+        +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+        +"-"+ dateTime.getFullYear()
+        +" "+ dateTime.getHours()
+        +":"+ dateTime.getMinutes() 
+        +":"+ dateTime.getSeconds()
+
+        newManeuverObject.man_note                  = "Sin observaciones."
+        newManeuverObject.maneuver_update_action    = "CREATED MANEUVER"
+        newManeuverObject.maneuver_update_source    = "ADMINISTRADOR"
+        newManeuverObject.maneuver_update_date      = event_time
+        newManeuverObject.maneuver_directive        = "PUERTO PATIO"
+        newManeuverObject.maneuver_current_location = "SIN INICIAR"
+        newManeuverObject.maneuver_current_status   = "SIN INICIAR"
+
+        /*
+        Events handled like array...
+        INDEX - OBJECT
+        [0]     Date and time...
+        [1]     Location...
+        [2]     Status...
+        [3]     Percentage...
+        */
+        let starting_events = [event_time, 'SIN INICIAR', 'SIN INICIAR','0%']
+        newManeuverObject.maneuver_events = starting_events
+        
+        /* - Step [2]
+        *  - Start promises to get PLATES and get CAAT before saving...
+        */ 
+        let searchPromises = []
+
+        const getPlates_promise = objectModelItem.find({object_owner:bodyValues.man_transportista,object_id:bodyValues.man_eco}).then((foundObject)=>
+        {
+            if(!foundObject)
+            {
+                auxFuncModule.logger("saveNewManeuver -> LN 609",3,2)
+            }else
+            {
+                auxFuncModule.logger("saveNewManeuver -> LN 612",2,2)
+                newManeuverObject.man_placas = foundObject[0].object_plates
+            } 
+        })
+
+         const getCAAT_promise = transportModelItem.find({transporter_name:bodyValues.man_transportista}).then((foundTransporter)=>
+        {
+            if(!foundTransporter)
+            {
+                auxFuncModule.logger("saveNewManeuver -> LN 622",3,2)
+            }else
+            {
+                auxFuncModule.logger("saveNewManeuver -> LN 625",2,2)
+                newManeuverObject.man_caat = foundTransporter[0].transporter_caat
+
+            } 
+        })
+ 
+        searchPromises.push(getPlates_promise)
+        searchPromises.push(getCAAT_promise)
+
+        await Promise.all(searchPromises).then(()=>
+        {
+
+            auxFuncModule.logger("saveNewManeuver -> LN 636",2,2)
+
+            /* - Step [3]
+            *  - Generate new maneuver ID based on the input data if previous promises were completed...
+            */ 
+
+            let firstIDSection  = generateIDHeader(newManeuverObject.man_operador,newManeuverObject.man_cliente,newManeuverObject.man_despacho)
+            let headerSearch    = new RegExp("^" + firstIDSection, "i")
+
+            /* - Step [4]
+            *  - Save new maneuver by finding maneuver ID...
+            */ 
+
+           maneuverModelItem.find({man_folio:{$regex:headerSearch}}).then((maneuverObjectFound)=>
+            {
+                if(maneuverObjectFound.length == 0)
+                {
+                    newManeuverObject.man_folio = firstIDSection+"_01"
+                    newManeuverObject.save()
+                
+                    auxFuncModule.logger("saveNewManeuver -> LN 656",2,3)
+                
+                    return res.status(200).send({message:'1'})
+                }else
+                {
+                    let nextConsecutiveID = firstIDSection+"_0"+(maneuverObjectFound.length+1)
+                    newManeuverObject.man_folio = nextConsecutiveID
+                    newManeuverObject.save()
+                
+                    auxFuncModule.logger("saveNewManeuver -> LN 665",2,3);
+                    return res.status(200).send({message:'1'})
+                } 
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("saveNewManeuver -> LN 670",5)+err
+                return res.status(200).send({message:'0'})  
+            })  
+        })
+    },
+
+
+
+
+
+    /** [ DELETE MANEUVER ]
+    * @param {*} req 
+    * @param {*} res
+    */    
+    deleteManeuver: async function(req,res)
+    {
+        auxFuncModule.logger("deleteManeuver -> LN 656",1)
+
+        /* - Step[1]
+        *  - Receive values from CLIENT...
+        *  - via POST -> BODY
+        */
+
+        let bodyValues = req.body 
+
+        /* - Step[2] 
+        *  - Received parameter double check...
+        */
+        if (!auxFuncModule.isValidValue(bodyValues.maneuverID_toDelete)) 
+        {
+            auxFuncModule.logger("deleteManeuver -> LN 670",3,2)
+            return res.status(200).send({message:'0'}) 
+        }else
+        {
+            /* - Step[3] 
+            *  - Virtual DELETE DB...
+            */
+
+            const dateTime = new Date()
+            const event_time = dateTime.getDate()
+            +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+            +"-"+ dateTime.getFullYear()
+            +" "+ dateTime.getHours()
+            +":"+ dateTime.getMinutes() 
+            +":"+ dateTime.getSeconds()
+
+            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.maneuverID_toDelete},
+                {maneuver_update_action:"DELETED"},
+                {maneuver_update_source:"ADMINISTRATOR"},
+                {maneuver_update_date:event_time},
+            ).then((deletedManeuver) =>
+            {
+                if(!deletedManeuver)
+                {
+                    auxFuncModule.logger("deleteManeuver -> LN 695",3,3)
+                    return res.status(200).send({message:'0'})       
+                }else
+                {
+                    auxFuncModule.logger("deleteManeuver -> LN 699",2,3)
+                    return res.status(200).send({message:'1'})
+                }                   
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("deleteManeuver -> LN 704",5,3)+err
+                return res.status(200).send({message:'0'})  
+            }) 
+        }
+    },
+
+
+
+
+
+    /** [ GET ALL MANEUVERS ]
+     * @param {*} req 
+     * @param {*} res
+     */
+    getAllManeuvers: async function(req, res)
+    {
+        auxFuncModule.logger("getAllManeuvers -> LN 691",1)
+
+        /* - Step [1]
+        *  - Search for maneuvers that are not "DELETED"...
+        */
+        await maneuverModelItem.find({maneuver_update_action:{$ne:"DELETED"}}).then((objectsFound)=>
+        {
+            if(objectsFound.length === 0)
+            {
+                auxFuncModule.logger("getAllManeuvers -> LN 700",3,1)    
+                return res.status(200).send({message:'0'})
+            }else
+            {
+                auxFuncModule.logger("getAllManeuvers -> LN 704",2,1)
+                return res.status(200).send({objectsFound})
+            }
+
+        }).catch((err)=>
+        {
+            auxFuncModule.logger("getAllManeuvers -> LN 710",5,1)+err
+            return res.status(200).send({message:'0'})  
+        })
+    },
+
+
+
+
+
+    /** [ UPDATE MANEUVER GPS TRACKING LINK ]
+    * @param {*} req 
+    * @param {*} res
+    */
+    updateTrackingLink: async function(req, res)
+    {
+        auxFuncModule.logger("updateTrackingLink -> LN 725",1)
+
+        /* - Step [1]
+        *  - Receive values from client request...
+        *  - via -> PATCH -> BODY
+        */
+        let bodyValues = req.body;
+        
+        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
+        {
+            auxFuncModule.logger("updateTrackingLink -> LN 735",3,1)
+            return res.status(200).send({message:'0'}) 
+        }else
+        {
+            auxFuncModule.logger("updateTrackingLink -> LN 739",2,1)
+           
+            /* - Step [2]
+            *  - Update maneuver tracking link in DB...
+            */
+            const dateTime = new Date()
+            const event_time = dateTime.getDate()
+            +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+            +"-"+ dateTime.getFullYear()
+            +" "+ dateTime.getHours()
+            +":"+ dateTime.getMinutes() 
+            +":"+ dateTime.getSeconds()
+
+            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.man_folio},
+                {man_gpsLink:bodyValues.man_gpsLink},
+                {maneuver_update_action:"UPDATED GPS"},
+                {maneuver_update_source:"ADMINISTRATOR"},
+                {maneuver_update_date:event_time},
+            ).then((updatedManeuver) =>
+            {
+                if(!updatedManeuver)
+                {
+                    auxFuncModule.logger("updateTrackingLink -> LN 761",3,2)
+                    return res.status(200).send({message:'0'})       
+                }else
+                {
+                    auxFuncModule.logger("updateTrackingLink -> LN 765",2,2)
+                    return res.status(200).send({message:'1'})
+                }                   
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("updateTrackingLink -> LN 770",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+        } 
+    },
+
+
+
+
+
+    /** [ SEND MANEUVER GPS LOCATION ]
+    * @param {*} req 
+    * @param {*} res
+    */
+    getGPS: async function(req, res)
+    {
+        auxFuncModule.logger("getGPS -> LN 785",1)
+    
+        /* - Step [1]
+        *  - get maneuver ID from client request...
+        *  - via GET -> URL PARAMETER
+        */
+        let searchingValue = Object.keys(req.query);
+
+        if(!auxFuncModule.isValidValue(searchingValue))
+        {
+            auxFuncModule.logger("getGPS -> LN 795",3,1)
+            return res.status(200).send({message:'0'})
+        }else
+        {
+            /* - Step [2]
+            *  - Search maneuver in the DB...
+            */
+            await maneuverModelItem.find({man_folio:searchingValue}).then((foundManeuver)=>
+            {   
+                if (foundManeuver.length <= 0)
+                {
+                    auxFuncModule.logger("getGPS -> LN 806",3,2)
+                    return res.status(200).send({message:'0'})
+                }else
+                {
+                    let trackingLink = foundManeuver[0].man_gpsLink
+                    auxFuncModule.logger("getGPS -> LN 811",2,2)
+                    return res.status(200).send({trackingLink})    
+                }
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("getGPS -> 816",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+        }
+    },
+
+
+
+
+
+    /** [ UPDATE MANEUVER LOCATION AND EVENTS]
+     * @param {*} req 
+     * @param {*} res
+     */
+    updateManeuverEvents: async function(req, res)
+    {
+        auxFuncModule.logger("updateManeuverEvents -> LN 852",1)
+
+        /* - Step [1]
+        *  - Receive searching values from client request...
+        *  - via -> PATCH -> BODY
+        */
+        let bodyValues = req.body; //Receive man_folio, man_location, man_event...
+
+        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
+        {
+            auxFuncModule.logger("updateManeuverEvents -> LN 862",3,1)
+            return res.status(200).send({message:'0'}) 
+        }else
+        {
+            auxFuncModule.logger("updateManeuverEvents -> LN 866",2,1)
+
+            /* - Step [2]
+            *  - Find maneuver in BD...
+            */
+            await maneuverModelItem.find({man_folio:bodyValues.man_folio}).then((foundManeuver)=>
+            {   
+                if (foundManeuver.length <= 0)
+                {
+                    auxFuncModule.logger("updateManeuverEvents -> LN 875",3,2) // Maneuver was not found in DB...
+                    return res.status(200).send({message:'0'})
+                }else
+                {
+                    auxFuncModule.logger("updateManeuverEvents -> LN 879",2,2)
+                        
+                    /* - Step [3]
+                    *  - Validate if user data is a valid combination...
+                    */
+
+                    if (processEvent(bodyValues.man_location,bodyValues.man_event).length <= 1) //Means that a valid combination was not found...
+                    {
+                        auxFuncModule.logger("updateManeuverEvents -> LN 868",3,2)
+                        return res.status(200).send({message:'0'})    
+                    }else
+                    {
+                        let event = processEvent(bodyValues.man_location,bodyValues.man_event)
+
+                        const dateTime = new Date()
+                        const event_time = dateTime.getDate()
+                        +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+                        +"-"+ dateTime.getFullYear()
+                        +" "+ dateTime.getHours()
+                        +":"+ dateTime.getMinutes() 
+                        +":"+ dateTime.getSeconds()
+
+                        let maneuver_finish_date = 'Aún en curso'
+                        console.log(event,event[2],event[3]);
+                        if (event[2] === 'FINALIZADO' || event[3] === '100%') 
+                        {
+                            maneuver_finish_date = event_time
+                        }
+
+                        maneuverModelItem.findOneAndUpdate(
+                            { man_folio:bodyValues.man_folio }, // Search Filter...
+                            {
+                            // Update loop...
+                            $push:{maneuver_events:{$each:event}},
+                            $set:
+                                {
+                                    maneuver_current_location:bodyValues.man_location,
+                                    maneuver_current_status:bodyValues.man_event,
+                                    maneuver_update_action:'UPDATED EVENT',
+                                    maneuver_update_source:'ADMINISTRATOR',
+                                    maneuver_update_date:event_time,
+                                    man_termino:maneuver_finish_date
+                                }
+                            }, 
+                            {new:true}
+                        )
+                        .then((updatedManeuver) =>
+                        {
+                            if(!updatedManeuver)
+                            {
+                                auxFuncModule.logger("updateManeuverEvents -> LN 968",3,3)
+                                return res.status(200).send({message:'0'})       
+                            }else
+                            {
+                                auxFuncModule.logger("updateManeuverEvents -> LN 972",2,3)
+                                return res.status(200).send({message:'1'})
+                            }                   
+                        }).catch((err)=>
+                        {
+                            auxFuncModule.logger("updateManeuverEvents -> LN 977",5,3)+err
+                            return res.status(200).send({message:'0'})  
+                        })               
+                    }
+                }
+                
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("updateManeuverEvents -> LN 985",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+                            
+        }
+    },
+
+
+
+
+
+    /** [ UPDATE MANEUVER NOTE ]
+    * @param {*} req 
+    * @param {*} res
+    */
+    updateNote: async function(req, res)
+    {
+        auxFuncModule.logger("updateNote -> LN 936",1)
+
+        /* - Step [1]
+        *  - Receive values from client request...
+        *  - via -> PATCH -> BODY
+        */
+        let bodyValues = req.body;
+        
+        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
+        {
+            auxFuncModule.logger("updateNote -> LN 946",3,1)
+            return res.status(200).send({message:'0'}) 
+        }else
+        {
+            auxFuncModule.logger("updateNote -> LN 950",2,1)
+           
+            /* - Step [2]
+            *  - Update maneuver NOTE in DB...
+            */
+            const dateTime = new Date()
+            const event_time = dateTime.getDate()
+            +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+            +"-"+ dateTime.getFullYear()
+            +" "+ dateTime.getHours()
+            +":"+ dateTime.getMinutes() 
+            +":"+ dateTime.getSeconds()
+
+            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.man_folio},
+                {man_note:bodyValues.man_note},
+                {maneuver_update_action:"UPDATED NOTE"},
+                {maneuver_update_source:"ADMINISTRATOR"},
+                {maneuver_update_date:event_time},
+            ).then((updatedManeuver) =>
+            {
+                if(!updatedManeuver)
+                {
+                    auxFuncModule.logger("updateNote -> LN 972",3,2)
+                    return res.status(200).send({message:'0'})       
+                }else
+                {
+                    auxFuncModule.logger("updateNote -> LN 976",2,2)
+                    return res.status(200).send({message:'1'})
+                }                   
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("updateNote -> LN 981",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+        } 
+    },
+
+//#endregion [ v1.1 CONTROLLER ]
+
 }
 
 module.exports = controller
@@ -534,29 +1059,19 @@ module.exports = controller
 
 
 
-
-
-
-
-/** 
- * +==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+
- * +                                                                                               +
- * + [⚑] LOCAL AUX FUNCTIONS                                                                     +
- * +                                                                                               +
- * +==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+
- */
+//#region [ [⚑] LOCAL AUX FUNCTIONS ]
 
 /** [ DYNAMIC MANEUVER ID GENERATOR ] 
- *  @returns STRING "fullID"
- *  @param operator
- *  @param customer
- *  @param date
+ *  @returns String "fullID"
+ *  @param String operator
+ *  @param String customer
+ *  @param String date
  */
 function generateIDHeader(operator, customer, date)
 {
-    /** - Paso [1]
-     *  - Obtener las primeras letras del parámetro OPERADOR...
-     */
+    /* - Step [1]
+    *  - Get two first characters of OPERATOR...
+    */
     var opFirstLetter  = operator.charAt(0).toUpperCase()
     var opSecondLetter = ''
 
@@ -569,9 +1084,9 @@ function generateIDHeader(operator, customer, date)
         opSecondLetter = operator.charAt(secondWordStartIndex+1).toUpperCase()
     }
 
-    /** - Paso [2]
-     *  - Obtener las primeras letras del parámetro customer...
-     */
+    /* - Step [2]
+    *  - Get two first characters of CUSTOMER...
+    */
     var cusFirstLetter  = customer.charAt(0).toUpperCase()
     var cusSecondLetter = ''
 
@@ -584,25 +1099,22 @@ function generateIDHeader(operator, customer, date)
         cusSecondLetter = customer.charAt(secondWordStartIndex+1).toUpperCase()
     }
 
-    /** - Paso [3]
-     *  - Obtener los valores de la fecha...
-     */
+    /* - Step [3]
+    *  - Get date values...
+    */
     var dateSection = date.substring(2,4) + date.substring(5,7) + date.substring(8,10)
 
-    /** - Paso [4]
-     *  - Generar el string ID
+    /** - Step [4]
+     *  - Generate FULL ID string...
      */
-    var IDheader = opFirstLetter+ 
-    opSecondLetter+
-    cusFirstLetter+
+    var IDheader = cusFirstLetter+
     cusSecondLetter+
+    opFirstLetter+ 
+    opSecondLetter+
     dateSection
 
     return IDheader
 }
-
-
-
 
 /** [ AUTOMATIC EQUIPMENT ASSIGMENT ] 
  *  @returns ARRAY "asignedEquipment"
@@ -798,3 +1310,130 @@ function asignEquipment(requestedManeuver,trucks,chassises,platforms,dollys)
     return asignedEquipment
 } 
 
+/** [ AUTOMATIC MANEUVER PROGRESS ASSIGMENT ]
+ * 
+ * @param {*} location 
+ * @param {*} event 
+ * @returns ARRAY 
+ */
+function processEvent(location, event) 
+{
+    const dateTime = new Date()
+    const event_time = dateTime.getDate()
+    +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+    +"-"+ dateTime.getFullYear()
+    +" "+ dateTime.getHours()
+    +":"+ dateTime.getMinutes() 
+    +":"+ dateTime.getSeconds()
+
+    let updatedEvent 
+
+    switch (location) 
+    {
+        case 'ASLA':
+            switch (event) 
+            {
+                case 'EN ESPERA':
+                    updatedEvent = [event_time,'ASLA','EN ESPERA','25%']
+                break;
+
+                case 'LLAMADO':
+                    updatedEvent = [event_time,'ASLA','LLAMADO','30%']
+                break;
+
+                case 'CANCELADO':
+                    updatedEvent = [event_time,'ASLA','CANCELADO','0%']
+                break;
+
+                case 'EVENTO EXTRA':
+                    updatedEvent = [event_time,'ASLA','EVENTO EXTRA','PD']
+                break;
+            }
+        break;
+
+        case 'EN RUTA':
+            switch (event) 
+            {
+                case 'EN RUTA A TERMINAL':
+                    updatedEvent = [event_time,'EN RUTA','EN RUTA A TERMINAL','40%']    
+                break;
+ 
+                case 'EN RUTA A PATIO':
+                    updatedEvent = [event_time,'EN RUTA','EN RUTA A PATIO','85%']
+                break;
+
+                case 'EVENTO EXTRA':
+                    updatedEvent = [event_time,'EN RUTA','EVENTO EXTRA','PD']
+                break;
+            }
+        break;
+            
+        case 'EN TERMINAL':
+            switch (event) 
+            {
+                case 'ESPERANDO A SER CARGADO':
+                    updatedEvent = [event_time,'EN TERMINAL','ESPERANDO A SER CARGADO','50%']
+                break;
+
+                case 'CARGADO':
+                    updatedEvent = [event_time,'EN TERMINAL','CONTENEDORES CARGADOS','75%']
+                break;
+            
+                case 'EVENTO EXTRA':
+                    updatedEvent = [event_time,'EN TERMINAL','EVENTO EXTRA','PD']
+                break;
+            }
+        break;
+
+        case 'RUTA FISCAL / MODULACIÓN':
+            switch (event) 
+            {
+                case 'SIN MODULAR':
+                    updatedEvent = [event_time,'RUTA FISCAL / MODULACIÓN','SIN MODULAR','80%']
+                break;
+
+                case 'VERDE':
+                    updatedEvent = [event_time,'RUTA FISCAL / MODULACIÓN','VERDE','85%']
+                break;
+
+                case 'AMARILLO':
+                    updatedEvent = [event_time,'RUTA FISCAL / MODULACIÓN','AMARILLO','82%']  
+                break;
+
+                case 'ROJO':
+                    updatedEvent = [event_time,'RUTA FISCAL / MODULACIÓN','ROJO','0%']  
+                break;
+
+                case 'EVENTO EXTRA':
+                    updatedEvent = [event_time,'RUTA FISCAL / MODULACIÓN','EVENTO EXTRA','PD']
+                break;
+            }
+        break;
+        
+        case 'EN PATIO':
+            switch (event) 
+            {
+                case 'ESPERANDO A SER DESCARGADO':
+                    updatedEvent = [event_time,'EN PATIO','ESPERANDO A SER DESCARGADO','90%']
+                break;
+
+                case 'FINALIZADO':
+                    updatedEvent = [event_time,'EN PATIO','FINALIZADO','100%']  
+                break;
+
+                case 'EVENTO EXTRA':
+                    updatedEvent = [event_time,'EN PATIO','EVENTO EXTRA','PD']
+                break;
+            }
+        break;
+
+
+        default:
+            updatedEvent = ['ERROR']
+        break;
+    }
+
+    return updatedEvent
+}
+
+//#endregion [ [⚑] LOCAL AUX FUNCTIONS ]

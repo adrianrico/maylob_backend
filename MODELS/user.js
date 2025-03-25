@@ -6,7 +6,7 @@ var schema = mongoose.Schema
 
 /** - DATABASE MODEL
  *  - Actual collections fields to be used in DB...
- *  - MONGO collection must be creaated first in DB...!
+ *  - MONGO collection must be created first in DB...!
  */
 var userSchema= schema({
     user_email: String,

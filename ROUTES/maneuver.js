@@ -11,15 +11,20 @@ var router = express.Router()
 
 // Add new maneuver...
 router.post('/addManeuver/',maneuverController.addManeuver)
+router.post('/saveNewManeuver/',maneuverController.saveNewManeuver)
+router.post('/deleteManeuver/',maneuverController.deleteManeuver)
 
 // Find maneuver by ID...
 router.get('/findManeuver/',maneuverController.findManeuver)
 
 // Update maneuver by ID... 
 router.patch('/updateManeuver/',maneuverController.updateManeuver)
+router.patch('/updateManeuverEvents/',maneuverController.updateManeuverEvents)
 
 // Update maneuver GPS by ID... 
 router.patch('/updateManeuverGPS/',maneuverController.updateManeuverGPS)
+router.patch('/updateTrackingLink/',maneuverController.updateTrackingLink)
+router.patch('/updateNote/',maneuverController.updateNote)
 
 // Get maneuver GPS by ID... 
 router.get('/getGPS/',maneuverController.getGPS)

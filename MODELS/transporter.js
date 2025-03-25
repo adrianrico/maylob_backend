@@ -1,0 +1,27 @@
+'use strict'
+
+var mongoose = require('mongoose')
+
+var schema = mongoose.Schema
+
+/** - DATABASE MODEL
+ *  - Actual collections fields to be used in DB...
+ *  - MONGO collection must be created first in DB...!
+ */
+var transporterSchema= schema({
+    transporter_id: String,
+    transporter_name:String,
+    transporter_caat:String,
+    transporter_priority: String,
+    transporter_registration: String,
+    transporter_equipment:{
+        type:[String],
+        default:[]
+    },
+    transporter_operators:{
+        type:[String],
+        default:[]
+    },
+})
+
+module.exports = mongoose.model('transporter',transporterSchema)

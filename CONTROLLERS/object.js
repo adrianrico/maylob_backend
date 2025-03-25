@@ -9,65 +9,7 @@ let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
 /** All controllers logic definition and implementation... */
 var controller = {
  
-    /** [ ADD OBJECT ]
-     * @param {*} req 
-     * @param {*} res
-     */
-    addObject: async function (req, res)
-    {
-        auxFuncModule.logger("addObject",1)
 
-        // Interface for new DB object to store...
-        let newObject = new objectModelItem()
-        
-        /** - Step [1]
-         *  - Receive values from client
-         */
-        let bodyValues = req.body // Contains all values...
-
-        let object_owner    = auxFuncModule.isValidValue(bodyValues.object_owner) ? bodyValues.object_owner : "MAYLOB" 
-        let object_priority = (object_owner === "MAYLOB") ? 1 : 2 
-
-        newObject.object_owner      = object_owner,
-        newObject.object_priority   = object_priority,
-        newObject.object_type       = bodyValues.object_type,
-        newObject.object_id         = bodyValues.object_id, 
-        newObject.object_plates     = bodyValues.object_plates, 
-        newObject.object_available  = bodyValues.object_available
-        newObject.object_requested  = 0
-        newObject.object_maneuver   = ""
-
-        auxFuncModule.logger("addObject",2,1)
-
-        /** - Step [2]
-         *  - OBJECT ID double check...
-         */
-        if (!auxFuncModule.isValidValue(bodyValues.object_id))
-        {
-            auxFuncModule.logger("addObject",3,2)
-            return res.status(200).send({message:'0'})    
-        }else
-        {
-            /** - Step [3]
-             *  -  Check if ID is alreday stored...
-             */
-            await objectModelItem.findOne({object_id:newObject.object_id}).then((foundObject) =>
-            {
-                if(foundObject)
-                {                    
-                    auxFuncModule.logger("addObject",3,3)
-                    return res.status(200).send({message:'0'}) 
-                }else
-                {   
-                    /** - Step [4]
-                     *  - Save the new object and return the new object...
-                     */
-                    newObject.save()
-                    return res.status(200).send(newObject)
-                } 
-            })
-        }
-    },
 
 
 
@@ -291,6 +233,95 @@ var controller = {
         }
     },    
 
+
+//#region [ v1.1 CONTROLLER ]
+
+    /** [ CREATE OBJECT ]
+     * @param {*} req 
+     * @param {*} res
+     */
+    create_object: async function (req, res)
+    {
+        auxFuncModule.logger("create_object -> LN 245",1)
+    
+        /* - Step [1]
+        *  - Receive values from CLIENT...
+        *  - via POST -> BODY
+        */
+
+        let newObject = new objectModelItem() // Interface to DB...
+        let bodyValues = req.body // Contains all received values...
+
+        newObject.object_id    = auxFuncModule.isValidValue(bodyValues.object_id)    ? bodyValues.object_id.toUpperCase()    : 'DATO NO ASIGNADO',
+        newObject.object_owner = auxFuncModule.isValidValue(bodyValues.object_owner) ? bodyValues.object_owner.toUpperCase() : 'DATO NO ASIGNADO',
+        newObject.object_type  = auxFuncModule.isValidValue(bodyValues.object_type)  ? bodyValues.object_type.toUpperCase()  : 'DATO NO ASIGNADO'
+
+        if (bodyValues.object_type === 'ECO') 
+        {
+            newObject.object_number             = auxFuncModule.isValidValue(bodyValues.object_number)             ? bodyValues.object_number.toUpperCase()             : 'DATO NO ASIGNADO',
+            newObject.object_plates             = auxFuncModule.isValidValue(bodyValues.object_plates)             ? bodyValues.object_plates.toUpperCase()             : 'DATO NO ASIGNADO',
+            newObject.object_year               = auxFuncModule.isValidValue(bodyValues.object_year)               ? bodyValues.object_year.toUpperCase()               : 'DATO NO ASIGNADO',
+            newObject.object_color              = auxFuncModule.isValidValue(bodyValues.object_color)              ? bodyValues.object_color.toUpperCase()              : 'DATO NO ASIGNADO',
+            newObject.object_serialNo           = auxFuncModule.isValidValue(bodyValues.object_serialNo)           ? bodyValues.object_serialNo.toUpperCase()           : 'DATO NO ASIGNADO',
+            newObject.object_motorNo           = auxFuncModule.isValidValue(bodyValues.object_motorNo)           ? bodyValues.object_motorNo.toUpperCase()           : 'DATO NO ASIGNADO',
+            newObject.object_insurance_company  = auxFuncModule.isValidValue(bodyValues.object_insurance_company)  ? bodyValues.object_insurance_company.toUpperCase()  : 'DATO NO ASIGNADO',
+            newObject.object_insurance_policyNo = auxFuncModule.isValidValue(bodyValues.object_insurance_policyNo) ? bodyValues.object_insurance_policyNo.toUpperCase() : 'DATO NO ASIGNADO'
+            
+        }
+        
+        newObject.object_priority     = (bodyValues.object_owner === "MAYLOB") ? 'PRIORITARIA' : 'NORMAL', 
+        newObject.object_available    = auxFuncModule.isValidValue(bodyValues.object_available)   ? bodyValues.object_available.toUpperCase()   : '0',
+        newObject.object_requested    = auxFuncModule.isValidValue(bodyValues.object_requested)   ? bodyValues.object_requested.toUpperCase()   : '0'
+        newObject.object_maneuver_id  = auxFuncModule.isValidValue(bodyValues.object_maneuver_id) ? bodyValues.object_maneuver_id.toUpperCase() : 'DATO NO ASIGNADO'
+
+        const dateTime = new Date()
+        const timeSnapshot = dateTime.getDate()
+        +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+        +"-"+ dateTime.getFullYear()
+        +" "+ dateTime.getHours()
+        +":"+ dateTime.getMinutes() 
+        +":"+ dateTime.getSeconds()
+
+        newObject.object_registration = timeSnapshot
+        
+        auxFuncModule.logger("create_object -> LN 287",2,1)
+    
+        /** - Step [2]
+         *  - OBJECT ID double check...
+         */
+
+        if (!auxFuncModule.isValidValue(bodyValues.object_id))
+        {
+            auxFuncModule.logger("create_object -> LN 295",3,2)
+            return res.status(200).send({message:'0'})    
+        }else
+        {
+            auxFuncModule.logger("create_object -> LN 299",2,2)
+            
+            /* - Step [3]
+            *  - Save new object if does not exist...
+            */
+            await objectModelItem.findOne({object_id:newObject.object_id}).then((foundObject) =>
+            {
+                if(foundObject)
+                {                    
+                    auxFuncModule.logger("create_object -> LN 308",3,2)
+                    return res.status(200).send({message:'0'}) 
+                }else
+                {   
+                    newObject.save()
+                    auxFuncModule.logger("create_object -> LN 313",2,2)
+                    return res.status(200).send({message:'1'})
+                } 
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("create_object -> LN 318",5)
+                res.status(200).send({message:'0'})  
+            })
+        }
+    },
+
+//#endregion [ v1.1 CONTROLLER ] 
 
 }
 module.exports = controller

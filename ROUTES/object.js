@@ -9,8 +9,8 @@ var router = express.Router()
 
 //#region [ CONTROLLER ROUTES ]
 
-// Add new object...
-router.post('/addObject',objectController.addObject)
+// Create new object...
+router.post('/createObject',objectController.create_object)
 
 // Read one object only...
 router.post('/getObject/', objectController.getObject)

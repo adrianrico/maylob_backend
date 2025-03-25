@@ -1,0 +1,109 @@
+'use strict'
+
+/** Import MODEL SCHEMA from models MODULE...*/
+var clientModelItem = require('../MODELS/client.js')
+
+/** Import auxiliary functions MODULE... */
+let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
+
+/** All controllers logic definition and implementation... */
+var controller = {
+
+    /** [ CREATE CLIENT ]
+    * @param {*} req 
+    * @param {*} res
+    */    
+    create_client: async function(req,res)
+    {
+        auxFuncModule.logger("create_client -> LN 18",1)
+
+        /* - Step [1]
+        *  - Receive values from CLIENT...
+        *  - via POST -> BODY
+        */
+        let newClientObject = new clientModelItem()
+        let bodyValues      = req.body  
+
+        newClientObject.client_id        = auxFuncModule.isValidValue(bodyValues.client_id)         ? bodyValues.client_id.toUpperCase()       : 'DATO NO ASIGNADO' ,
+        newClientObject.client_name      = auxFuncModule.isValidValue(bodyValues.client_name)       ? bodyValues.client_name.toUpperCase()     : 'DATO NO ASIGNADO' ,
+        newClientObject.client_priority  = auxFuncModule.isValidValue(bodyValues.client_priority)   ? bodyValues.client_priority.toUpperCase() : 'DATO NO ASIGNADO' 
+        newClientObject.client_status    = auxFuncModule.isValidValue(bodyValues.client_status  )   ? bodyValues.client_status  .toUpperCase() : 'DATO NO ASIGNADO' 
+      
+        const dateTime = new Date()
+        const timeSnapshot = dateTime.getDate()
+        +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
+        +"-"+ dateTime.getFullYear()
+        +" "+ dateTime.getHours()
+        +":"+ dateTime.getMinutes() 
+        +":"+ dateTime.getSeconds()
+
+        newClientObject.client_registration = timeSnapshot
+        
+        auxFuncModule.logger("create_client -> LN 41",2,1)
+
+        /* - Step [2]
+        *  - Validate if client is already created, if not then create it... BE SURE TO CHANGE IT TO AN ID...!
+        */ 
+        await clientModelItem.find({client_name:bodyValues.client_name}).then((clientObjectFound)=>
+        {
+            //Not found, then save new...
+            if(clientObjectFound.length == 0)
+            {
+                newClientObject.save()
+                auxFuncModule.logger("create_client -> LN 53",2,2)
+                return res.status(200).send({message:'1'})
+            }else
+            {
+                auxFuncModule.logger("create_client -> LN 57",2,2);
+                return res.status(200).send({message:'0'})
+            } 
+        }).catch((err)=>
+        {
+            auxFuncModule.logger("create_client -> LN 62",5,2)+err
+            return res.status(200).send({message:'0'})  
+        }) 
+    },
+
+
+
+
+
+    /** [ READ CLIENTS ] */ 
+    read_clients: async function(req,res)
+    {
+        auxFuncModule.logger("read_clients -> LN 74",1)
+
+        /* - Step [1]
+        *  - Search for stored clients in DB...
+        */
+        await clientModelItem.find({}).then((clientsFound)=>
+        {
+            let client_names = []
+
+            // No clients stored...
+            if(clientsFound.length === 0)
+            {
+                auxFuncModule.logger("read_clients -> LN 86",3,1)    
+                return res.status(200).send({message:'0'})
+            }else
+            {
+                // Return only names...
+                for (let index = 0; index < clientsFound.length; index++) 
+                {
+                    client_names.push(clientsFound[index].client_name)
+                }
+
+                auxFuncModule.logger("read_clients -> LN 96",2,1)
+                return res.status(200).send({client_names})
+            }
+
+        }).catch((err)=>
+        {
+            auxFuncModule.logger("read_clients -> LN 101",5)+err
+            return res.status(200).send({message:'0'})  
+        })
+    },
+
+}
+
+module.exports = controller
