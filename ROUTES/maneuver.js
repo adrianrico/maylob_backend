@@ -10,8 +10,9 @@ var router = express.Router()
 //#region [ CONTROLLER ROUTES ]
 
 // Add new maneuver...
-router.post('/addManeuver/',maneuverController.addManeuver)
 router.post('/saveNewManeuver/',maneuverController.saveNewManeuver)
+
+
 router.post('/deleteManeuver/',maneuverController.deleteManeuver)
 
 // Find maneuver by ID...
