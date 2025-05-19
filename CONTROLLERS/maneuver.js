@@ -139,74 +139,7 @@ var controller = {
 
 
 
-    /** [ FIND MANEUVER BY MANEUVER ID OR CONTAINERS ID]
-     * @param {*} req 
-     * @param {*} res
-     */
-    findManeuver: async function(req, res)
-    {
-        auxFuncModule.logger("findManeuver",1)
-    
-        /** - Step [1]
-         *  - get searching value from client...
-         *  - [A] = By maneuver ID...
-         *  - [B] = By any given container ID...
-         *  - via GET -> URL PARAMETER
-         */
-        let searchingValue = Object.keys(req.query);
 
-        if(!auxFuncModule.isValidValue(searchingValue))
-        {
-            auxFuncModule.logger("findManeuver_161",3,1)
-            return res.status(200).send({message:'0'})
-        }else
-        {
-            /** - Step [2]
-             *  - Search maneuver in the DB...
-             */
-
-            switch (searchingValue[0].length) 
-            {
-                case 13:
-                    await maneuverModelItem.find({maneuver_id:searchingValue}).then((foundManeuver)=>
-                    {   
-                        if (foundManeuver.length <= 0)
-                        {
-                            auxFuncModule.logger("findManeuver_176",3,2)
-                            return res.status(200).send({message:'0'})
-                        }else
-                        {
-                            auxFuncModule.logger("findManeuver",2,2)
-                            return res.status(200).send({foundManeuver})    
-                        }
-                    }).catch((err)=>
-                    {
-                        auxFuncModule.logger("findManeuver_185",3,2)+err
-                        return res.status(200).send({message:'0'})  
-                    })
-                break;
-
-                case 11:
-                    await maneuverModelItem.find({maneuver_containers:searchingValue[0]}).then((foundManeuver)=>
-                    {   
-                        if (foundManeuver.length <= 0)
-                        {
-                            auxFuncModule.logger("findManeuver_195",3,2)
-                            return res.status(200).send({message:'0'})
-                        }else
-                        {
-                            auxFuncModule.logger("findManeuver",2,2)
-                            return res.status(200).send({foundManeuver})    
-                        }
-                    }).catch((err)=>
-                    {
-                        auxFuncModule.logger("findManeuver_204",5,2)+err
-                        return res.status(200).send({message:'0'})  
-                    })
-                break;
-            }
-        }
-    },
     
     
 
@@ -306,91 +239,6 @@ var controller = {
 
 
 
-    /** [ GET AVAILABLE MANEUVERS ]
-     * @param {*} req 
-     * @param {*} res
-     */
-    getManeuvers: async function(req, res)
-    {
-        auxFuncModule.logger("getManeuvers",1)
-
-        /** MANEUVERS 
-         *  FULL:
-         *  1 tracto
-         *  2 chassis
-         *  1 dolly
-         * 
-         *  SINGLE:
-         *  1 tracto
-         *  1 chassis or 1 platform
-         * 
-         *  EXTERNAL:
-         *  No need to select or fill equipment...
-         *  Always selectable option...
-         */
-
-        /** - Step [1]
-         *  - Search for available and not requested objects...
-         */
-        var availableTrucks         = 0
-        var availableChassises      = 0
-        var availableDollys         = 0
-        var availablePlatforms      = 0
-        var availableManeuvers      = ['EXTERNA']
-
-        await objectModelItem.find({object_available: 1, object_requested:0}).then((objectsFound)=>
-        {
-            if(objectsFound.length === 0)
-            {
-                auxFuncModule.logger("getManeuvers",3,1)    
-                return res.status(200).send({availableManeuvers})
-            }else
-            {
-                objectsFound.forEach(element => 
-                {
-                    const objectType = element.object_type
-
-                    objectType == 'TRACTO'      ? availableTrucks++ : availableTrucks + 0
-                    objectType == 'CHASSIS'     ? availableChassises++ : availableChassises + 0
-                    objectType == 'DOLLY'       ? availableDollys++ : availableDollys + 0
-                    objectType == 'PLATAFORMA'  ? availablePlatforms++ : availablePlatforms + 0
-                })
-
-                //console.log(availableTrucks,availableChassises,availableDollys,availablePlatforms);
-                auxFuncModule.logger("getManeuvers",2,1)
-
-                /** - Step [2]
-                 *  - Get maneuvers with the equipment found...
-                 */
-                if (availableTrucks >= 1) 
-                {
-                    /**Check conditions for a FULL maneuver...*/
-                    if (availableDollys >= 1) 
-                    {   
-                        if ((availableChassises + availablePlatforms) >= 2)
-                        {
-                            availableManeuvers.push('FULL')   
-                        }
-                    }
-    
-                    /**Check conditions for a SINGLE maneuver...*/
-                    if (availableChassises >= 1 || availablePlatforms >= 1) 
-                    {
-                        availableManeuvers.push('SENCILLA')
-                    }
-
-                    auxFuncModule.logger("getManeuvers",2,2)
-                    return res.status(200).send({availableManeuvers})
-                }       
-                
-            }
-
-        }).catch((err)=>
-        {
-            auxFuncModule.logger("getManeuvers",3,1)+err
-            return res.status(200).send({message:'0'})  
-        })
-    },
 
 
 
@@ -576,6 +424,8 @@ var controller = {
         newManeuverObject.maneuver_directive        = "PUERTO - PATIO"
         newManeuverObject.maneuver_current_location = "SIN INICIAR"
         newManeuverObject.maneuver_current_status   = "SIN INICIAR"
+        newManeuverObject.man_moni_enable           = "FALSE"
+        newManeuverObject.man_moni_key              = "NO KEY"
 
         /*  Events handled like array...
             INDEX * 4 -> OBJECT
@@ -588,7 +438,7 @@ var controller = {
         */ 
         let searchPromises = []
 
-        const getPlates_promise = objectModelItem.find({object_owner:bodyValues.man_transportista,object_id:bodyValues.man_eco}).then((foundObject)=>
+        let getPlates_promise = objectModelItem.find({object_owner:bodyValues.man_transportista,object_id:bodyValues.man_eco}).then((foundObject)=>
         {
             if(!foundObject)
             {
@@ -811,6 +661,108 @@ var controller = {
 
 
 
+    /** [ GET CLIENT MANEUVERS ]
+    * @param {*} req 
+    * @param {*} res
+    */
+    getClientManeuvers: async function(req, res)
+    {
+        auxFuncModule.logger("getClientManeuvers -> LN 737",1)
+
+        /* - Step [1]
+        *  - Receive SEARCH KEY from client request...
+        *  - via GET -> URL PARAMETER
+        */
+
+        let search_key = Object.keys(req.query);
+
+        if(!auxFuncModule.isValidValue(search_key))
+        {
+            auxFuncModule.logger("getClientManeuvers -> LN 748",3,1)
+            return res.status(200).send({message:'0'})
+        }else
+        {
+            /* - Step [2]
+            *  - Search maneuver in the DB...
+            */
+            await maneuverModelItem.find({man_cliente:search_key[0],maneuver_current_status:{$nin:["100%"]},man_moni_enable:"true"}).then((foundManeuver)=>
+            {   
+                if (foundManeuver.length <= 0)
+                {
+                    auxFuncModule.logger("getClientManeuvers -> LN 759",3,2)
+                    return res.status(200).send({message:'0'})
+                }else
+                {
+                    auxFuncModule.logger("getGPS -> LN 811",2,2)
+                    return res.status(200).send({foundManeuver})    
+                }
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("getGPS -> 816",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+        }
+
+    },
+
+
+
+
+
+    /** [ UPDATE MANEUVER MONI ENABLE VALUES ]
+    * @param {*} req 
+    * @param {*} res
+    */
+    updateMoniStatus: async function(req, res)
+    {
+        auxFuncModule.logger("updateMoniStatus -> LN 880",1)
+
+        /* - Step [1]
+        *  - Receive values from client request...
+        *  - via -> PATCH -> BODY
+        */
+
+        let bodyValues = req.body;
+        
+        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
+        {
+            auxFuncModule.logger("updateMoniStatus -> LN 891",3,1)
+            return res.status(200).send({message:'0'}) 
+        }else
+        {
+            auxFuncModule.logger("updateMoniStatus -> LN 895",2,1)
+           
+            /* - Step [2]
+            *  - Update maneuver in DB...
+            */
+
+            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.man_folio},
+                {man_moni_enable:bodyValues.man_moni_enable},
+                {maneuver_update_action:"UPDATED MONI STATUS"},
+                {maneuver_update_source:"ADMINISTRATOR"},
+                {maneuver_update_date:time_snapshot()},
+            ).then((updatedManeuver) =>
+            {
+                if(!updatedManeuver)
+                {
+                    auxFuncModule.logger("updateMoniStatus -> LN 910",3,2)
+                    return res.status(200).send({message:'0'})       
+                }else
+                {
+                    auxFuncModule.logger("updateMoniStatus -> LN 912",2,2)
+                    return res.status(200).send({message:'1'})
+                }                   
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("updateMoniStatus -> LN 919",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+        } 
+    },
+
+
+
+
 
     /** [ SEND MANEUVER GPS LOCATION ]
     * @param {*} req 
@@ -1025,6 +977,54 @@ var controller = {
                 return res.status(200).send({message:'0'})  
             })
         } 
+    },
+
+
+
+
+
+    /** [ FIND ONE MANEUVER BY MANEUVER ID ONLY]
+     * @param {*} req 
+     * @param {*} res
+     */
+    findManeuver: async function(req, res)
+    {
+        auxFuncModule.logger("findManeuver -> LN 992",1)
+    
+        /** - Step [1]
+         *  - get searching value from client...
+         *  - via GET -> URL PARAMETER
+         */
+        let searchingValue = Object.keys(req.query);
+
+        if(!auxFuncModule.isValidValue(searchingValue))
+        {
+            auxFuncModule.logger("findManeuver -> LN 1002",3,1)
+            
+            return res.status(200).send({message:'0'})
+        }else
+        {
+            /** - Step [2]
+             *  - Search maneuver in the DB...
+             */
+            await maneuverModelItem.find({man_folio:searchingValue}).then((foundManeuver)=>
+            {   
+                if (foundManeuver.length <= 0)
+                {
+                    auxFuncModule.logger("findManeuver -> LN 1014",3,2)
+                    return res.status(200).send({message:'0'})
+                }else
+                {
+                    auxFuncModule.logger("findManeuver -> LN 1018",2,2)
+                    console.log(foundManeuver[0].maneuver_events);
+                    return res.status(200).send({foundManeuver})    
+                }
+            }).catch((err)=>
+            {
+                auxFuncModule.logger("findManeuver -> LN 1024",5,2)+err
+                return res.status(200).send({message:'0'})  
+            })
+        }
     },
 
 //#endregion [ v1.1 CONTROLLER ]

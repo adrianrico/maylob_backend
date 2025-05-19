@@ -1,4 +1,4 @@
-# NODE JS BACKEND - MAYLOB
+# NODE JS BACKEND - MAYLOB [v1.0.4]
 
 [⚑] Full BACKEND project **LOCAL COPY** is used sepparately to allow NPM INIT and INSTALL in a way that local server is up and running for testing...
 
@@ -21,9 +21,8 @@
 
 ## EXTENDED CHANGE LOG:
 
-
 >### [ MANEUVERS ]
 >>
 >>**CONTROLLERS**
->>- Fixed bug where date and number were coverted to upper case... 
->>- Time snapshot function added to local aux funtions to improve event times capture with less code on each function... 
+>>- Moved function to find one maneuver by ID to the new controller... 
+>>- Added new fields to allow admin to allow / deny maneuver display to users...

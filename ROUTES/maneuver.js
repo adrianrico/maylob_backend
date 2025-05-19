@@ -9,31 +9,23 @@ var router = express.Router()
 
 //#region [ CONTROLLER ROUTES ]
 
-// Add new maneuver...
+// [v1.0.4] POST ROUTES...
+router.post('/addManeuver/',maneuverController.addManeuver) // Deprecated...
 router.post('/saveNewManeuver/',maneuverController.saveNewManeuver)
-
-
 router.post('/deleteManeuver/',maneuverController.deleteManeuver)
 
-// Find maneuver by ID...
-router.get('/findManeuver/',maneuverController.findManeuver)
-
-// Update maneuver by ID... 
+// [v1.0.4] UPDATE ROUTES... 
 router.patch('/updateManeuver/',maneuverController.updateManeuver)
 router.patch('/updateManeuverEvents/',maneuverController.updateManeuverEvents)
-
-// Update maneuver GPS by ID... 
 router.patch('/updateManeuverGPS/',maneuverController.updateManeuverGPS)
 router.patch('/updateTrackingLink/',maneuverController.updateTrackingLink)
 router.patch('/updateNote/',maneuverController.updateNote)
+router.patch('/updateMoniStatus/',maneuverController.updateMoniStatus)
 
-// Get maneuver GPS by ID... 
+// [v1.0.4] GET ROUTES...
+router.get('/findManeuver/',maneuverController.findManeuver)
 router.get('/getGPS/',maneuverController.getGPS)
-
-// Get available maneuvers based on the equipment...
-router.get('/getManeuvers',maneuverController.getManeuvers)
-
-// Get all maneuvers...
+router.get('/getClientManeuvers',maneuverController.getClientManeuvers)
 router.get('/getAllManeuvers',maneuverController.getAllManeuvers)
 
 //#endregion [ CONTROLLER ROUTES ]

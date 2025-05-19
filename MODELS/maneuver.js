@@ -46,6 +46,8 @@ var maneuverSchema= schema({
     manCont_4_tipo:String,
     man_placas:String,
     man_caat:String,
+    man_moni_enable:String,
+    man_moni_key:String,
     maneuver_update_action:String,
     maneuver_update_source:String,
     maneuver_update_date:String,
