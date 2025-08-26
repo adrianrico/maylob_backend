@@ -21,6 +21,7 @@ router.patch('/updateManeuverGPS/',maneuverController.updateManeuverGPS)
 router.patch('/updateTrackingLink/',maneuverController.updateTrackingLink)
 router.patch('/updateNote/',maneuverController.updateNote)
 router.patch('/updateMoniStatus/',maneuverController.updateMoniStatus)
+router.patch('/updateManeuvers/',maneuverController.updateManeuvers)
 
 // [v1.0.4] GET ROUTES...
 router.get('/findManeuver/',maneuverController.findManeuver)
