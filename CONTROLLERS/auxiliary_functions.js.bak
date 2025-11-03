@@ -1,9 +1,9 @@
 'use strict'
 
 //#region [⚑] AUXILIARY FUCTIONS...
-function isValidValue(value2Check)
+function isValidValue(value_to_check)
 {
-    let result = (value2Check === "" || value2Check === undefined || value2Check === null) ? false : true
+    let result = (value_to_check === "" || value_to_check === undefined || value_to_check === null) ? false : true
     return result
 }
 
@@ -11,42 +11,38 @@ function isValidValue(value2Check)
 
 
 
-function logger(functionName,functionCategory,functionStep)
+function logger(functionName,line,functionStep,functionCategory, message)
 {
-    /** - CATEGORIES
-     *  - 1 -> Request
-     *  - 2 -> Done
-     *  - 3 -> Error
-     *  - 4 -> Previous step error
-     */
+    isValidValue(message) ? message = message : message = ''
+
     switch (functionCategory) 
     {
         case 1:
-            console.log('\n\n\n\n\n======================================================================================');
-            console.log('[⚑][i]['+functionName+'] - Requested...')
-            console.log('--------------------------------------------------------------------------------------');
+            functionCategory = "Done..."
         break;
     
         case 2:
-            console.log('[↑][i]['+functionName+'] - Step '+functionStep+' done...');
-            console.log('--------------------------------------------------------------------------------------');
+            functionCategory = "Error..."
         break;
 
         case 3:
-            console.log('[↑][e]['+functionName+'] - Step '+functionStep+' ERROR... ');
-            console.log('--------------------------------------------------------------------------------------');
-        break;
-
-        case 4:
-            console.log('[↑][e]['+functionName+'] - Previous step error; Step '+functionStep+' not started...');
-            console.log('--------------------------------------------------------------------------------------');
-        break;
-
-        case 5:
-            console.log('[↑][e]['+functionName+'] - Promise ERROR '+functionStep);
-            console.log('--------------------------------------------------------------------------------------');
+            functionCategory = "Promise error..."
         break;
     }
+
+    if (functionStep === 0 ) 
+    {
+        console.log('\n\n\n\n\n============================================================================================================================================================================');
+        console.log('[⚑]['+functionName+']['+line+'] → Requested...')
+        console.log('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------');
+    }else
+    {
+        console.log('['+functionName+']['+line+'] → STEP ['+functionStep+'] '+functionCategory+' '+message);
+        console.log('----------------------------------------------------------------------------------------------------------------------------------------------------------------------------');
+    }
+
+
+
 
 }
 //#endregion [⚑] AUXILIARY FUCTIONS...

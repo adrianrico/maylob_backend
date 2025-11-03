@@ -135,17 +135,7 @@ var controller = {
 
         return res.status(200).send({message:'MANIOBRA GUARDADA'})
     },
-
-
-
-
-
-
-    
-    
-
-
-    
+ 
     /** [ UPDATE MANEUVER ]
      * @param {*} req 
      * @param {*} res
@@ -236,15 +226,6 @@ var controller = {
         } 
     },
 
-
-
-
-
-
-
-
-    
-
     /** [ UPDATE MANEUVER GPS ]
      * @param {*} req 
      * @param {*} res
@@ -289,10 +270,6 @@ var controller = {
         } 
     },
     
-
-
-
-
     /** [ GET MANEUVER GPS ]
      * @param {*} req 
      * @param {*} res

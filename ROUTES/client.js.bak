@@ -15,12 +15,6 @@ router.post('/createClient/',clientController.create_client)
 // READ all clients...
 router.get('/readClients/',clientController.read_clients)
 
-// CREATE new client...
-router.patch('/updateClient/',clientController.update_client)
-
-// DELETE new client...
-router.delete('/deleteClient/',clientController.delete_client)
-
 //#endregion [ CLIENT ROUTES ]
 
 module.exports = router

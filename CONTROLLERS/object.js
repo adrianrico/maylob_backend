@@ -234,12 +234,9 @@ var controller = {
     },    
 
 
-//#region [ v1.1 CONTROLLER ]
+//#region [ CONTROLLER v1.2 ]
 
-    /** [ CREATE OBJECT ]
-     * @param {*} req 
-     * @param {*} res
-     */
+    //[ CREATE OBJECT ]
     create_object: async function (req, res)
     {
         auxFuncModule.logger("create_object -> LN 245",1)
@@ -263,7 +260,7 @@ var controller = {
             newObject.object_year               = auxFuncModule.isValidValue(bodyValues.object_year)               ? bodyValues.object_year.toUpperCase()               : 'DATO NO ASIGNADO',
             newObject.object_color              = auxFuncModule.isValidValue(bodyValues.object_color)              ? bodyValues.object_color.toUpperCase()              : 'DATO NO ASIGNADO',
             newObject.object_serialNo           = auxFuncModule.isValidValue(bodyValues.object_serialNo)           ? bodyValues.object_serialNo.toUpperCase()           : 'DATO NO ASIGNADO',
-            newObject.object_motorNo           = auxFuncModule.isValidValue(bodyValues.object_motorNo)           ? bodyValues.object_motorNo.toUpperCase()           : 'DATO NO ASIGNADO',
+            newObject.object_motorNo            = auxFuncModule.isValidValue(bodyValues.object_motorNo)            ? bodyValues.object_motorNo.toUpperCase()            : 'DATO NO ASIGNADO',
             newObject.object_insurance_company  = auxFuncModule.isValidValue(bodyValues.object_insurance_company)  ? bodyValues.object_insurance_company.toUpperCase()  : 'DATO NO ASIGNADO',
             newObject.object_insurance_policyNo = auxFuncModule.isValidValue(bodyValues.object_insurance_policyNo) ? bodyValues.object_insurance_policyNo.toUpperCase() : 'DATO NO ASIGNADO'
             
@@ -321,7 +318,7 @@ var controller = {
         }
     },
 
-//#endregion [ v1.1 CONTROLLER ] 
+//#endregion [ CONTROLLER v1.2 ] 
 
 }
 module.exports = controller
