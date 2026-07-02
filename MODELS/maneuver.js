@@ -9,64 +9,50 @@ var schema = mongoose.Schema
 *  - MONGO collection must be created first in DB...!
 */
 var maneuverSchema= schema({
-    man_folio: String,
-    man_cliente:String,
-    man_modalidad:String,
-    man_despacho: String,
-    man_termino:String,
-    man_aa:String,
-    man_ejecutiva:String,
-    man_terminal:String,
-    man_descarga:String,
-    man_descarga_extraLocation:String,
+    man_id: String,
+    man_client:String,
+    man_type:String,
+    man_dispatch_date: String,
+    man_finish_date:String,
+    man_agent:String,
+    man_executive:String,
+    man_load_location:String,
+    man_unload_location:String,
+    man_extra_location:String,
+    man_extra_location_link:String,
     man_eco:String,
-    man_operador:String,
-    man_gpsLink:String,
-    man_transportista:String,
+    man_operator:String,
+    man_gps_link:String,
+    man_transporter:String,
     man_note:String,
-    manCont_1_id:String,
-    manCont_1_size:String,
-    manCont_1_contenido:String,
-    manCont_1_peso:String,
-    manCont_1_tipo:String,
-    manCont_2_id:String,
-    manCont_2_size:String,
-    manCont_2_contenido:String,
-    manCont_2_peso:String,
-    manCont_2_tipo:String,
-    manCont_3_id:String,
-    manCont_3_size:String,
-    manCont_3_contenido:String,
-    manCont_3_peso:String,
-    manCont_3_tipo:String,
-    manCont_4_id:String,
-    manCont_4_size:String,
-    manCont_4_contenido:String,
-    manCont_4_peso:String,
-    manCont_4_tipo:String,
-    man_placas:String,
-    man_caat:String,
     man_moni_enable:String,
     man_moni_key:String,
-    maneuver_update_action:String,
-    maneuver_update_source:String,
-    maneuver_update_date:String,
-    maneuver_directive:String,
-    maneuver_current_location:String,
-    maneuver_current_status:String,
-    maneuver_events:{
+    man_update_action:String,
+    man_update_source:String,
+    man_update_date:String,
+    man_modality:String,
+    man_current_location:String,
+    man_current_status:String,
+    man_progress: {
+        type: String,
+        default: '0%'
+    },
+    man_events:{
         type:[String],
         default:[]
     },
-    maneuver_equipment:{
-        type:[String],
-        default:[]
+    man_containers:{
+    type:[Object],
+    default:[]
     },
-    maneuver_containers:{
-        type:[String],
-        default:[]
+    man_intermediate_stops:{
+    type:[Object],
+    default:[]
+    },
+    man_route:{
+        type:Object,
+        default:null
     }
-    
 })
 
 module.exports = mongoose.model('maneuver',maneuverSchema)

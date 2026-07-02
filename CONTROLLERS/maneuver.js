@@ -1,1222 +1,520 @@
 'use strict'
 
 //Import required MODEL SCHEMAS from models MODULE...
-var maneuverModelItem  = require('../MODELS/maneuver.js')
-let transportModelItem = require('../MODELS/transporter.js') 
-let objectModelItem    = require('../MODELS/object.js') 
+let maneuverModelItem  = require('../MODELS/maneuver.js')
+let routeModelItem     = require('../MODELS/c_routes.js')
 
 // Import auxiliary functions MODULE...
 let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
-const { get } = require('mongoose')
 
 // All controllers logic definition and implementation...
-var controller = {
-
-    /** [ ADD MANEUVER ]
-    * @param {*} req 
-    * @param {*} res
-    */    
-    addManeuver: async function(req,res)
+var controller = 
+{
+    // [⚑ v2.0][ CREATE OR UPDATE MANEUVER ][ Modificado: 01/07/2026 ]
+    handle_maneuver: async function(req, res)
     {
-        auxFuncModule.logger("addManeuver",1)
-
-        /** Steps handler... */
-        let stepsHandler = [false,false]    
-
-        /** - Step [1]
-         *  - Receive values from CLIENT...
-         *  - via POST -> BODY
-         */
-        let newManeuverObject = new maneuverModelItem()
-        let bodyValues        = req.body  
-
-        newManeuverObject.maneuver_id               = ''
-        newManeuverObject.maneuver_type             = bodyValues.maneuver_type,
-        newManeuverObject.maneuver_origin           = bodyValues.maneuver_origin,
-        newManeuverObject.maneuver_destination      = bodyValues.maneuver_destination,
-        newManeuverObject.maneuver_customer         = bodyValues.maneuver_customer,
-        newManeuverObject.maneuver_planned_date     = bodyValues.maneuver_planned_date,
-        newManeuverObject.maneuver_operator         = bodyValues.maneuver_operator,
-        newManeuverObject.maneuver_directive        = "PUERTO - PATIO"
-        newManeuverObject.maneuver_current_location = "SIN INICIAR"
-        newManeuverObject.maneuver_current_status   = "SIN INICIAR"
-        newManeuverObject.maneuver_equipment        = bodyValues.maneuver_equipment
-        newManeuverObject.maneuver_containers       = bodyValues.maneuver_containers    
-        newManeuverObject.maneuver_tracking_link    = bodyValues.maneuver_tracking_link    
-
-        const dateTime = new Date()
-        const event_time = dateTime.getDate()
-        +"-"+ dateTime.toLocaleString('default',{month:'long'}).toUpperCase()
-        +"-"+ dateTime.getFullYear()
-        +" "+ dateTime.getHours()
-        +":"+ dateTime.getMinutes() 
-        +":"+ dateTime.getSeconds()
-
-        let starting_events = [event_time, 'SIN INICIAR', 'SIN INICIAR','0%']
-
-        newManeuverObject.maneuver_events = starting_events
-
-        stepsHandler[0] = true
-        auxFuncModule.logger("addManeuver",2,1)
-
-        /** - Step [2]
-         *  - Change equipment status in DB...
-         */ 
-
-        const statusPromises    = []
-        let updateObjectChecker = 0
-
-        if (bodyValues.maneuver_type !== 'EXTERNA')
-        {
-            newManeuverObject.maneuver_equipment.forEach(equipmentElement => 
-            {
-                const promise = objectModelItem.findOneAndUpdate({object_id:equipmentElement},{object_available:0,object_requested:1},{new:true}).then((updatedObject) =>
-                {
-                    if(!updatedObject)
-                    {
-                        auxFuncModule.logger("addManeuver",3,2)
-                    }else
-                    {
-                        updateObjectChecker++ 
-                        console.log('[i][addManeuver] - Step 2; FLAGS available & requested changed...')
-                    } 
-                }).catch((err)=>
-                {
-                    auxFuncModule.logger("addManeuver",3,2)+err
-                })
-
-                statusPromises.push(promise)        
-            })
-        }   
-
-        await Promise.all(statusPromises).then(()=>
-        {
-            auxFuncModule.logger("addManeuver",2,2)
-            stepsHandler[1]  = true
-        })  
-
-
-        /** - Step [3]
-         *  - Validate if maneuver exists already...
-         *  - If validation ok then maneuver is saved...
-         */ 
-        if (stepsHandler[1])
-        {
-            let firstIDSection  = generateIDHeader(newManeuverObject.maneuver_operator,newManeuverObject.maneuver_customer,newManeuverObject.maneuver_planned_date)
-            let headerSearch    = new RegExp("^" + firstIDSection, "i")
-        
-            await maneuverModelItem.find({maneuver_id:{$regex:headerSearch}}).then((maneuverObjectFound)=>
-            {
-                /** - Step [3]
-                 *  - Save new maneuver...
-                 *  - By using REGEX the promise will find the # of coincidences
-                 *    that´s why using maneuverObjectFound.length+1 for consecutive...
-                 */
-            
-                 if(maneuverObjectFound.length == 0)
-                {
-                    newManeuverObject.maneuver_id = firstIDSection+"_01"
-                    newManeuverObject.save()
-                
-                    auxFuncModule.logger("addManeuver",2,3)
-                
-                    //return res.status(200).send(newManeuverObject)
-                }else
-                {
-                    let nextConsecutiveID = firstIDSection+"_0"+(maneuverObjectFound.length+1)
-                    newManeuverObject.maneuver_id = nextConsecutiveID
-                    newManeuverObject.save()
-                
-                    auxFuncModule.logger("addManeuver",2,3);
-                    //return res.status(200).send(newManeuverObject)
-                } 
-            })   
-        }   
-
-        return res.status(200).send({message:'MANIOBRA GUARDADA'})
-    },
- 
-    /** [ UPDATE MANEUVER ]
-     * @param {*} req 
-     * @param {*} res
-     */
-    updateManeuver: async function(req, res)
-    {
-        auxFuncModule.logger("updateManeuver_195",1)
-
-        /** - Step [1]
-         *  - Receive filter values from client request...
-         *  - via -> PATCH -> BODY
-         */
-        let bodyValues = req.body;
-
-        if (!auxFuncModule.isValidValue(bodyValues.maneuver_id)) 
-        {
-            auxFuncModule.logger("updateManeuver_205",3,1)
-            return res.status(200).send({message:'0'}) 
-        }else
-        {
-            auxFuncModule.logger("updateManeuver_209",2,1)
-
-            /** - Step [2]
-             *  - Search maneuver in the DB...
-             */
-            await maneuverModelItem.find({maneuver_id:bodyValues.maneuver_id}).then((foundManeuver)=>
-            {   
-
-                if (foundManeuver.length <= 0)
-                {
-                    auxFuncModule.logger("updateManeuver_219",3,2)
-                    return res.status(200).send({message:'0'})
-                }else
-                {
-                    auxFuncModule.logger("updateManeuver_223",2,2)
-
-                    let eventsFound = foundManeuver[0].maneuver_events.length;
-                    let event       = [bodyValues.maneuver_event_time,bodyValues.maneuver_current_location,bodyValues.maneuver_current_status,bodyValues.maneuver_completion] 
-
-                    for (let index = 0; index <= eventsFound; index++) 
-                    {
-                        if(foundManeuver[0].maneuver_events[(index*4)+1] === bodyValues.maneuver_current_location && foundManeuver[0].maneuver_events[(index*4)+2] === bodyValues.maneuver_current_status) 
-                        {
-                            //console.log(foundManeuver[0].maneuver_events[(index*4)+1],foundManeuver[0].maneuver_events[(index*4)+2]);
-                            return res.status(200).send({message:'event already saved...'})
-                        }else
-                        {
-                            if (index+1 === eventsFound) 
-                            {
-                                maneuverModelItem.findOneAndUpdate(
-                                    { maneuver_id:bodyValues.maneuver_id }, // Search Filter...
-                                    {
-                                    // Update loop...
-                                    $push:{maneuver_events:{$each:event}},
-                                    $set:
-                                        {
-                                            maneuver_current_location:bodyValues.maneuver_current_location,
-                                            maneuver_current_status:bodyValues.maneuver_current_status
-                                        }
-                                    }, 
-                                    {new:true}
-                                )
-                                .then((updatedManeuver) =>
-                                {
-                                    if(!updatedManeuver)
-                                    {
-                                        auxFuncModule.logger("updateManeuver_255",3,2)
-                                        return res.status(200).send({message:'0'})       
-                                    }else
-                                    {
-                                        auxFuncModule.logger("updateManeuver_259",2,2)
-                                        return res.status(200).send({updatedManeuver})
-                                    }                   
-                                }).catch((err)=>
-                                {
-                                    auxFuncModule.logger("updateManeuver_264",5,2)+err
-                                    return res.status(200).send({message:'0'})  
-                                }) 
-                            }
-                        }
-                    }
-                }
-            }).catch((err)=>
-            {
-                auxFuncModule.logger("updateManeuver_273",5,2)+err
-                return res.status(200).send({message:'0'})  
-            })
-        } 
-    },
-
-    /** [ UPDATE MANEUVER GPS ]
-     * @param {*} req 
-     * @param {*} res
-     */
-    updateManeuverGPS: async function(req, res)
-    {
-        auxFuncModule.logger("updateManeuverGPS",1)
-
-        /** - Step [1]
-         *  - Receive filter values from client request...
-         *  - via -> PATCH -> BODY
-         */
-        let bodyValues = req.body;
-
-        if (!auxFuncModule.isValidValue(bodyValues.maneuver_id)) 
-        {
-            auxFuncModule.logger("updateManeuverGPS",3,1)
-            return res.status(200).send({message:'0'}) 
-        }else
-        {
-            auxFuncModule.logger("updateManeuverGPS",2,1)
-           
-            /** - Step [2]
-             *  - Update maneuver in DB...
-             */
-            await maneuverModelItem.findOneAndUpdate({maneuver_id:bodyValues.maneuver_id },{maneuver_tracking_link:bodyValues.maneuver_tracking_link},{new:true}).then((updatedManeuver) =>
-            {
-                if(!updatedManeuver)
-                {
-                    auxFuncModule.logger("updateManeuverGPS",3,2)
-                    return res.status(200).send({message:'0'})       
-                }else
-                {
-                    auxFuncModule.logger("updateManeuverGPS",2,2)
-                    return res.status(200).send({updatedManeuver})
-                }                   
-            }).catch((err)=>
-            {
-                auxFuncModule.logger("updateManeuverGPS",3,2)+err
-                return res.status(200).send({message:'0'})  
-            }) 
-        } 
-    },
-    
-    /** [ GET MANEUVER GPS ]
-     * @param {*} req 
-     * @param {*} res
-     */
-        getGPS: async function(req, res)
-        {
-            auxFuncModule.logger("getGPS",1)
-        
-            /** - Step [1]
-             *  - get maneuver ID from client request...
-             *  - via GET -> URL PARAMETER
-             */
-            let searchingValue = Object.keys(req.query);
-
-            console.log(searchingValue);
-
-            if(!auxFuncModule.isValidValue(searchingValue))
-            {
-                auxFuncModule.logger("getGPS",3,1)
-                return res.status(200).send({message:'0'})
-            }else
-            {
-                /** - Step [2]
-                 *  - Search maneuver in the DB...
-                 */
-                await maneuverModelItem.find({maneuver_id:searchingValue}).then((foundManeuver)=>
-                {   
-                    if (foundManeuver.length <= 0)
-                    {
-                        auxFuncModule.logger("getGPS",3,2)
-                        return res.status(200).send({message:'0'})
-                    }else
-                    {
-                        let trackingLink = foundManeuver[0].maneuver_tracking_link
-
-                        auxFuncModule.logger("getGPS",2,2)
-                        return res.status(200).send({trackingLink})    
-                    }
-                }).catch((err)=>
-                {
-                    auxFuncModule.logger("getGPS",3,2)+err
-                    return res.status(200).send({message:'0'})  
-                })
-            }
-        },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-//#region [ v1.2 CONTROLLER ]
-
-    // [ SAVE NEW MANEUVER ][⚑]
-    saveNewManeuver: async function(req,res)
-    {
-        let function_name = "saveNewManeuver"
-        auxFuncModule.logger(function_name, 365,0)
+        let function_name = "handle_maneuver"
+        auxFuncModule.logger(function_name, 16, 0)
 
         /* - Step [1]
-        *  - Receive values from CLIENT and validate them...
-        *  - via POST -> BODY
+        *  - Receive and sanitize values from CLIENT via POST -> BODY
         */
+        let bodyValues        = req.body
         let newManeuverObject = new maneuverModelItem()
-        let bodyValues        = req.body  
 
-        // Block 1 data...
-        newManeuverObject.man_cliente   = auxFuncModule.isValidValue(bodyValues.man_cliente)   ? bodyValues.man_cliente.toUpperCase()   : 'SIN DATO ASIGNADO'
-        newManeuverObject.man_modalidad = auxFuncModule.isValidValue(bodyValues.man_modalidad) ? bodyValues.man_modalidad.toUpperCase() : 'SIN DATO ASIGNADO'
-        newManeuverObject.man_despacho  = auxFuncModule.isValidValue(bodyValues.man_despacho)  ? bodyValues.man_despacho                : 'SIN DATO ASIGNADO'
-        newManeuverObject.man_aa        = auxFuncModule.isValidValue(bodyValues.man_aa)        ? bodyValues.man_aa.toUpperCase()        : 'SIN DATO ASIGNADO'
-        newManeuverObject.man_ejecutiva = auxFuncModule.isValidValue(bodyValues.man_ejecutiva) ? bodyValues.man_ejecutiva.toUpperCase() : 'SIN DATO ASIGNADO'
+        const man_id                  = auxFuncModule.sanitizeId(bodyValues.man_id)                           ?? null
+        const man_client              = auxFuncModule.sanitizeString(bodyValues.man_client)?.toUpperCase()    ?? 'PENDIENTE'
+        const man_type                = auxFuncModule.sanitizeString(bodyValues.man_type)?.toUpperCase()      ?? 'PENDIENTE'
+        const man_modality            = auxFuncModule.sanitizeString(bodyValues.man_modality)?.toUpperCase()  ?? 'PENDIENTE'
+        const man_dispatch_date       = auxFuncModule.sanitizeString(bodyValues.man_dispatch_date)            ?? 'PENDIENTE'
+        const man_executive           = auxFuncModule.sanitizeName(bodyValues.man_executive)?.toUpperCase()   ?? 'PENDIENTE'
+        const man_agent               = auxFuncModule.sanitizeName(bodyValues.man_agent)?.toUpperCase()       ?? 'PENDIENTE'
+        const man_load_location       = auxFuncModule.sanitizeString(bodyValues.man_load_location)            ?? 'PENDIENTE'
+        const man_unload_location     = auxFuncModule.sanitizeString(bodyValues.man_unload_location)          ?? 'PENDIENTE'
+        const man_extra_location      = auxFuncModule.sanitizeString(bodyValues.man_extra_location)           ?? 'PENDIENTE'
+        const man_extra_location_link = auxFuncModule.sanitizeUrl(bodyValues.man_extra_location_link)         ?? 'PENDIENTE'
+        const man_eco                 = auxFuncModule.sanitizeString(bodyValues.man_eco)                      ?? 'PENDIENTE'
+        const man_operator            = auxFuncModule.sanitizeName(bodyValues.man_operator)?.toUpperCase()    ?? 'PENDIENTE'
+        const man_gps_link            = auxFuncModule.sanitizeUrl(bodyValues.man_gps_link)                    ?? 'PENDIENTE'
+        const man_transporter         = auxFuncModule.sanitizeString(bodyValues.man_transporter)              ?? 'PENDIENTE'
+        const man_moni_enable         = (bodyValues.man_moni_enable === false || bodyValues.man_moni_enable === 'false') ? 'false' : 'true'
+        const man_containers          = auxFuncModule.sanitizeContainers(bodyValues.man_containers)
+        const man_intermediate_stops  = auxFuncModule.sanitizeStops(bodyValues.man_intermediate_stops)
+        const man_route_id            = auxFuncModule.sanitizeId(bodyValues.man_route_id) ?? null
+        const man_current_location    = auxFuncModule.sanitizeString(bodyValues.man_current_location)?.toUpperCase() ?? 'SIN INICIAR'
+        const man_current_status      = auxFuncModule.sanitizeString(bodyValues.man_current_status)?.toUpperCase()   ?? 'SIN INICIAR'
 
-        // Block 2 data...
-        newManeuverObject.man_terminal               = auxFuncModule.isValidValue(bodyValues.man_terminal)               ? bodyValues.man_terminal               : 'SIN DATO ASIGNADO'
-        newManeuverObject.man_descarga               = auxFuncModule.isValidValue(bodyValues.man_descarga)               ? bodyValues.man_descarga               : 'SIN DATO ASIGNADO'
-        newManeuverObject.man_descarga_extraLocation = auxFuncModule.isValidValue(bodyValues.man_descarga_extraLocation) ? bodyValues.man_descarga_extraLocation : 'SIN DATO ASIGNADO'
-        
-        // Block 3 data...
-        newManeuverObject.man_transportista = auxFuncModule.isValidValue(bodyValues.man_transportista) ? bodyValues.man_transportista : 'SIN DATO ASIGNADO' ,    
-        newManeuverObject.man_eco           = auxFuncModule.isValidValue(bodyValues.man_eco)           ? bodyValues.man_eco           : 'SIN DATO ASIGNADO' ,
-        newManeuverObject.man_operador      = auxFuncModule.isValidValue(bodyValues.man_operador)      ? bodyValues.man_operador      : 'SIN DATO ASIGNADO' , 
-        newManeuverObject.man_gpsLink       = auxFuncModule.isValidValue(bodyValues.man_gpsLink)       ? bodyValues.man_gpsLink       : 'SIN DATO ASIGNADO' ,     
-  
-        // Block 4...
-        newManeuverObject.manCont_1_id        = auxFuncModule.isValidValue(bodyValues.manCont_1_id)        ? bodyValues.manCont_1_id.toUpperCase()        : ''   
-        newManeuverObject.manCont_1_size      = auxFuncModule.isValidValue(bodyValues.manCont_1_size)      ? bodyValues.manCont_1_size                    : ''   
-        newManeuverObject.manCont_1_contenido = auxFuncModule.isValidValue(bodyValues.manCont_1_contenido) ? bodyValues.manCont_1_contenido.toUpperCase() : ''   
-        newManeuverObject.manCont_1_peso      = auxFuncModule.isValidValue(bodyValues.manCont_1_peso)      ? bodyValues.manCont_1_peso                    : ''   
-        newManeuverObject.manCont_1_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_1_tipo)      ? bodyValues.manCont_1_tipo.toUpperCase()      : '' 
+        newManeuverObject.man_client              = man_client
+        newManeuverObject.man_type                = man_type
+        newManeuverObject.man_modality            = man_modality
+        newManeuverObject.man_dispatch_date       = man_dispatch_date
+        newManeuverObject.man_executive           = man_executive
+        newManeuverObject.man_agent               = man_agent
+        newManeuverObject.man_load_location       = man_load_location
+        newManeuverObject.man_unload_location     = man_unload_location
+        newManeuverObject.man_extra_location      = man_extra_location
+        newManeuverObject.man_extra_location_link = man_extra_location_link
+        newManeuverObject.man_eco                 = man_eco
+        newManeuverObject.man_operator            = man_operator
+        newManeuverObject.man_gps_link            = man_gps_link
+        newManeuverObject.man_transporter         = man_transporter
 
-        // Block 5...
-        newManeuverObject.manCont_2_id        = auxFuncModule.isValidValue(bodyValues.manCont_2_id)        ? bodyValues.manCont_2_id.toUpperCase()        : ''
-        newManeuverObject.manCont_2_size      = auxFuncModule.isValidValue(bodyValues.manCont_2_size)      ? bodyValues.manCont_2_size                    : ''
-        newManeuverObject.manCont_2_contenido = auxFuncModule.isValidValue(bodyValues.manCont_2_contenido) ? bodyValues.manCont_2_contenido.toUpperCase() : ''
-        newManeuverObject.manCont_2_peso      = auxFuncModule.isValidValue(bodyValues.manCont_2_peso)      ? bodyValues.manCont_2_peso                    : ''
-        newManeuverObject.manCont_2_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_2_tipo)      ? bodyValues.manCont_2_tipo.toUpperCase()      : ''
-
-        // Block 6...
-        newManeuverObject.manCont_3_id        = auxFuncModule.isValidValue(bodyValues.manCont_3_id)        ? bodyValues.manCont_3_id.toUpperCase()        : '' ,    
-        newManeuverObject.manCont_3_size      = auxFuncModule.isValidValue(bodyValues.manCont_3_size)      ? bodyValues.manCont_3_size                    : '' ,    
-        newManeuverObject.manCont_3_contenido = auxFuncModule.isValidValue(bodyValues.manCont_3_contenido) ? bodyValues.manCont_3_contenido.toUpperCase() : '' ,    
-        newManeuverObject.manCont_3_peso      = auxFuncModule.isValidValue(bodyValues.manCont_3_peso)      ? bodyValues.manCont_3_peso                    : '' ,    
-        newManeuverObject.manCont_3_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_3_tipo)      ? bodyValues.manCont_3_tipo.toUpperCase()      : '' ,  
-
-        // Block 7...
-        newManeuverObject.manCont_4_id        = auxFuncModule.isValidValue(bodyValues.manCont_4_id)        ? bodyValues.manCont_4_id.toUpperCase()        : '' ,    
-        newManeuverObject.manCont_4_size      = auxFuncModule.isValidValue(bodyValues.manCont_4_size)      ? bodyValues.manCont_4_size                    : '' ,    
-        newManeuverObject.manCont_4_contenido = auxFuncModule.isValidValue(bodyValues.manCont_4_contenido) ? bodyValues.manCont_4_contenido.toUpperCase() : '' ,    
-        newManeuverObject.manCont_4_peso      = auxFuncModule.isValidValue(bodyValues.manCont_4_peso)      ? bodyValues.manCont_4_peso                    : '' ,    
-        newManeuverObject.manCont_4_tipo      = auxFuncModule.isValidValue(bodyValues.manCont_4_tipo)      ? bodyValues.manCont_4_tipo.toUpperCase()      : '' 
-
-        // Build initial default values...
-        newManeuverObject.man_note                  = ""
-        newManeuverObject.maneuver_update_action    = "CREATED MANEUVER"
-        newManeuverObject.maneuver_update_source    = "ADMINISTRATOR"
-        newManeuverObject.maneuver_update_date      = timeSnapshot()
-        newManeuverObject.maneuver_directive        = "PUERTO - PATIO"
-        newManeuverObject.maneuver_current_location = "SIN INICIAR"
-        newManeuverObject.maneuver_current_status   = "SIN INICIAR"
-        newManeuverObject.man_moni_enable           = "true"
-        newManeuverObject.man_moni_key              = "NO KEY"
-
-        //  Events handled like array -> INDEX * 4 -> Each event length -> [0] Date and time | [1] Location | [2] Status | [3] Percentage...
-        let starting_events = [timeSnapshot(), 'SIN INICIAR', 'SIN INICIAR','0%']
-        newManeuverObject.maneuver_events = starting_events
-
-        auxFuncModule.logger(function_name,432,1,1,"[i] Initial values processed")
+        auxFuncModule.logger(function_name, 61, 1, 1, "[i] Values received and sanitized...")
 
         /* - Step [2]
-        *  - Start promises to get PLATES and get CAAT before saving...
-        */ 
-        let searchPromises = []
-        const getPlates_promise = objectModelItem.find({object_owner:bodyValues.man_transportista,object_id:bodyValues.man_eco}).then((foundObject)=>
+        *  - Determine ID: generate new one or use the received one...
+        */
+        if ((man_id ?? '') === '' || man_id === '0')
         {
-            if(!foundObject)
-            {
-                auxFuncModule.logger(function_name, 442,2,2,"[e] Error, PLATES not found...")
-            }else
-            {
-                newManeuverObject.man_placas = foundObject[0].object_plates
-                auxFuncModule.logger(function_name, 446,2,1,"[i] PLATES value found, ready to update...")
-            } 
-        })
-
-        const getCAAT_promise = transportModelItem.find({transporter_name:bodyValues.man_transportista}).then((foundTransporter)=>
+            let id_params = [man_operator, man_client, man_dispatch_date]
+            newManeuverObject.man_id = auxFuncModule.createId(id_params)
+        }else
         {
-            if(!foundTransporter)
-            {
-                auxFuncModule.logger(function_name, 454,2,2,"[e] Error, CAAT not found...")
-            }else
-            {
-                newManeuverObject.man_caat = foundTransporter[0].transporter_caat
-                auxFuncModule.logger(function_name, 458,2,1,"[i] CAAT value found, ready to update...")
-            } 
-        })
- 
-        searchPromises.push(getPlates_promise)
-        searchPromises.push(getCAAT_promise)
+            newManeuverObject.man_id = man_id
+        }
 
-        // Wait for previous promises to resolve before genetaring new DOCUMENT...
-        await Promise.all(searchPromises).then(()=>
+        auxFuncModule.logger(function_name, 75, 2, 1, "[i] Maneuver ID determined: " + newManeuverObject.man_id)
+
+        /* - Step [3]
+        *  - Find if maneuver exists and create or update accordingly...
+        */
+        try
         {
-            auxFuncModule.logger(function_name, 468,2,1)
+            let man_route = null
 
+            if (man_route_id)
+            {
+                const customRouteFound = await routeModelItem.findOne({ route_id: man_route_id })
+                man_route = customRouteFound ?? null
+            }else if (bodyValues.man_route && typeof bodyValues.man_route === 'object' && !Array.isArray(bodyValues.man_route))
+            {
+                man_route = auxFuncModule.sanitizeObject(bodyValues.man_route)
+            }
+
+            auxFuncModule.logger(function_name, 84, 3, 1, "[i] Route resolved via: " + (man_route_id ? "custom route lookup" : (man_route ? "client-provided object" : "none")))
+
+            const maneuverObjectFound = await maneuverModelItem.find({ man_id: newManeuverObject.man_id })
+
+            auxFuncModule.logger(function_name, 89, 4, 1, "[i] Query executed, matches found: " + maneuverObjectFound.length)
+
+            switch (true)
+            {
+                // Maneuver does not exist -> create it...
+                case (maneuverObjectFound.length === 0):
+                    newManeuverObject.man_route               = man_route
+                    newManeuverObject.man_containers          = man_containers
+                    newManeuverObject.man_intermediate_stops  = man_intermediate_stops
+                    newManeuverObject.man_moni_enable      = man_moni_enable
+                    newManeuverObject.man_note             = ''
+                    newManeuverObject.man_update_action    = 'CREATED MANEUVER'
+                    newManeuverObject.man_update_source    = 'ADMINISTRATOR'
+                    newManeuverObject.man_update_date      = auxFuncModule.timeSnapshot()
+                    newManeuverObject.man_current_location = man_current_location
+                    newManeuverObject.man_current_status   = man_current_status
+                    newManeuverObject.man_moni_key         = 'NO KEY'
+                    newManeuverObject.man_progress         = '0%'
+                    newManeuverObject.man_events           = [auxFuncModule.timeSnapshot(), man_current_location, man_current_status, newManeuverObject.man_progress]
+
+                    await newManeuverObject.save()
+
+                    auxFuncModule.logger(function_name, 111, 5, 1, "[i] New MANEUVER has been STORED...")
+                    return res.status(200).send({ code: '1', message: 'Maniobra almacenada correctamente.' })
+
+                // Maneuver exists -> update it...
+                case (maneuverObjectFound.length >= 1):
+                    // Optional tracking reset — only applied when the caller explicitly sends
+                    // these fields (e.g. the frontend does this when the assigned route
+                    // changes, since the old location/status/events no longer correspond to
+                    // any point of the new route). Omitted fields leave the stored value
+                    // untouched ($set skips `undefined`)...
+                    const locationReset = bodyValues.man_current_location !== undefined
+                        ? (auxFuncModule.sanitizeString(bodyValues.man_current_location)?.toUpperCase() ?? '')
+                        : undefined
+                    const statusReset = bodyValues.man_current_status !== undefined
+                        ? (auxFuncModule.sanitizeString(bodyValues.man_current_status)?.toUpperCase() ?? '')
+                        : undefined
+                    const progressReset = bodyValues.man_progress !== undefined
+                        ? (auxFuncModule.sanitizeString(bodyValues.man_progress) ?? '0%')
+                        : undefined
+                    const eventsReset = Array.isArray(bodyValues.man_events) && bodyValues.man_events.length === 0
+                        ? []
+                        : undefined
+
+                    const updatedManeuver = await maneuverModelItem.findOneAndUpdate(
+                        { man_id: newManeuverObject.man_id },
+                        {
+                            $set: {
+                                man_client:              newManeuverObject.man_client,
+                                man_type:                newManeuverObject.man_type,
+                                man_modality:            man_modality,
+                                man_dispatch_date:       newManeuverObject.man_dispatch_date,
+                                man_executive:           newManeuverObject.man_executive,
+                                man_agent:               newManeuverObject.man_agent,
+                                man_load_location:       newManeuverObject.man_load_location,
+                                man_unload_location:     newManeuverObject.man_unload_location,
+                                man_extra_location:      newManeuverObject.man_extra_location,
+                                man_extra_location_link: newManeuverObject.man_extra_location_link,
+                                man_eco:                 newManeuverObject.man_eco,
+                                man_operator:            newManeuverObject.man_operator,
+                                man_gps_link:            newManeuverObject.man_gps_link,
+                                man_transporter:         newManeuverObject.man_transporter,
+                                man_moni_enable:         man_moni_enable,
+                                man_containers:          man_containers,
+                                man_intermediate_stops:  man_intermediate_stops,
+                                man_route:               man_route !== null ? man_route : undefined,
+                                man_current_location:    locationReset,
+                                man_current_status:      statusReset,
+                                man_progress:            progressReset,
+                                man_events:              eventsReset,
+                                man_update_action:       'UPDATED MANEUVER',
+                                man_update_source:       'ADMINISTRATOR',
+                                man_update_date:         auxFuncModule.timeSnapshot()
+                            }
+                        },
+                        { new: false }
+                    )
+
+                    if (updatedManeuver)
+                    {
+                        auxFuncModule.logger(function_name, 149, 5, 1, "[i] Found MANEUVER has been UPDATED...")
+                        return res.status(200).send({ code: '1', message: 'Maniobra actualizada correctamente.' })
+                    }else
+                    {
+                        auxFuncModule.logger(function_name, 153, 5, 2, "[e] MANEUVER has NOT been updated...")
+                        return res.status(500).send({ code: '-1', message: 'Error al actualizar la maniobra.' })
+                    }
+
+                default:
+                    auxFuncModule.logger(function_name, 158, 6, 2, "[e] MANEUVER not processed...")
+                    return res.status(404).send({ code: '-1', message: 'Datos de la maniobra no encontrados.' })
+            }
+        }catch(error)
+        {
+            auxFuncModule.logger(function_name, 163, 7, 3, "[e] Maneuver not processed, PROMISE(S) ERROR...")
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
+        }
+    },
+
+
+    //[⚑ v2.0][ UPDATE MANEUVER CURRENT LOCATION/STATUS ][ Modificado: 01/07/2026 ]
+    update_location: async function(req, res)
+    {
+        let function_name = "update_location"
+        auxFuncModule.logger(function_name, 0, 0)
+
+        /* - Step [1]
+        *  - Receive and sanitize values from CLIENT via PATCH -> BODY
+        */
+        const bodyValues           = req.body
+        const man_id               = auxFuncModule.sanitizeId(bodyValues.man_id)                  ?? null
+        const man_current_location = auxFuncModule.sanitizeString(bodyValues.man_current_location) ?? null
+        const man_current_status   = auxFuncModule.sanitizeString(bodyValues.man_current_status)   ?? null
+
+        auxFuncModule.logger(function_name, 1, 1, 1, "[i] Values received and sanitized...")
+
+        /* - Step [2]
+        *  - Validate required values before proceeding...
+        */
+        if (!man_id || !man_current_location || !man_current_status)
+        {
+            auxFuncModule.logger(function_name, 2, 2, 2, "[e] Missing required values, rejecting request...")
+            return res.status(400).send({ code: '-1', message: 'Datos incompletos para actualizar la ubicación.' })
+        }
+
+        try
+        {
             /* - Step [3]
-            *  - Generate new maneuver ID based on the input data if previous promises were completed...
-            */ 
+            *  - Find the maneuver to update...
+            */
+            const maneuverFound = await maneuverModelItem.findOne({ man_id: man_id })
 
-            let firstIDSection  = generateIDHeader(newManeuverObject.man_operador,newManeuverObject.man_cliente,newManeuverObject.man_despacho)
-            let headerSearch    = new RegExp("^" + firstIDSection, "i")
+            if (!maneuverFound)
+            {
+                auxFuncModule.logger(function_name, 3, 3, 2, "[e] Maneuver not found...")
+                return res.status(404).send({ code: '-1', message: 'Maniobra no encontrada.' })
+            }
 
-            auxFuncModule.logger(function_name, 477,3,1,"[i] Generated first MANEUVER ID section...")
+            auxFuncModule.logger(function_name, 3, 3, 1, "[i] Maneuver found, calculating progress...")
 
             /* - Step [4]
-            *  - Save new maneuver by finding maneuver ID...
-            */ 
-            maneuverModelItem.find({man_folio:{$regex:headerSearch}}).then((maneuverObjectFound)=>
-            {
-                if(maneuverObjectFound.length == 0)
-                {
-                    newManeuverObject.man_folio = firstIDSection+"_01"
-                    newManeuverObject.save()
-                
-                    auxFuncModule.logger(function_name,489,4,1,"[i] Consecutive maneuver stored...")
-                
-                    return res.status(200).send({message:'1'})
-                }else
-                {
-                    let nextConsecutiveID = firstIDSection+"_0"+(maneuverObjectFound.length+1)
-                    newManeuverObject.man_folio = nextConsecutiveID
-                    newManeuverObject.save()
-                
-                    auxFuncModule.logger(function_name,498,4,1,"[i] First maneuver stored...")
-
-                    return res.status(200).send({message:'1'})
-                } 
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name, 508,4,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })  
-        })
-    },
-
-
-
-
-
-    // [ DELETE MANEUVER ][⚑]
-    deleteManeuver: async function(req,res)
-    {        
-        let function_name = 'deleteManeuver'
-        auxFuncModule.logger(function_name, 518,0)
-
-        /* - Step [1]
-        *  - Receive values from CLIENT...
-        *  - via POST -> BODY
-        */
-        let bodyValues = req.body 
-
-        /* - Step[2] 
-        *  - Received parameter double check...
-        */
-        if (!auxFuncModule.isValidValue(bodyValues.maneuverID_toDelete)) 
-        {
-            auxFuncModule.logger(function_name, 531,2,2,"[e] Empty MAN ID value received, stopping and sending res 0...")
-            return res.status(200).send({message:'0'}) 
-        }else
-        {
-            /* - Step[3] 
-            *  - Virtual DELETE DB...
+            *  - Resolve the route assigned to this maniobra: prefer the live route (fresh
+            *    events/stops, matched by man_route.route_id), then the embedded snapshot
+            *    itself (route deleted since linking), then a same origin/destination name
+            *    match for legacy maniobras never explicitly linked — same resolution order
+            *    the frontend uses (buildPointMap in RutasSeguimiento.jsx)...
             */
-            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.maneuverID_toDelete},
-                {maneuver_update_action:"DELETED MANEUVER"},
-                {maneuver_update_source:"ADMINISTRATOR"},
-                {maneuver_update_date:timeSnapshot()},
-            ).then((deletedManeuver) =>
+            let route = null
+            if (maneuverFound.man_route?.route_id)
             {
-                if(!deletedManeuver)
+                route = await routeModelItem.findOne({ route_id: maneuverFound.man_route.route_id })
+            }
+            if (!route) route = maneuverFound.man_route ?? null
+            if (!route)
+            {
+                route = await routeModelItem.findOne({
+                    route_origin:      maneuverFound.man_load_location,
+                    route_destination: maneuverFound.man_unload_location
+                })
+            }
+
+            const routeStops = route?.route_intermediate_stops
+            const stops       = Array.isArray(routeStops) && routeStops.length > 0
+                ? routeStops
+                : (maneuverFound.man_intermediate_stops ?? [])
+
+            const addPointMilestones = (validMilestones, pointName, events) => {
+                for (const e of events ?? [])
                 {
-                    auxFuncModule.logger(function_name, 546,3,2,"[e] Error while deleting, maneuver not updated...")
-                    return res.status(200).send({message:'0'})       
-                }else
+                    const eventName = e?.event_name ?? ''
+                    if (eventName && eventName.toUpperCase() !== 'CANCELADO') validMilestones.add(pointName + '|' + eventName)
+                }
+            }
+
+            /* - Step [5]
+            *  - Build the set of every REAL (point + event) milestone defined by the route,
+            *    split by origin/intermediates vs destination, excluding CANCELADO. The full
+            *    union is both the denominator (its size) and the whitelist used to validate
+            *    history — only genuine route events count towards progress, so a bogus/legacy
+            *    entry like the creation snapshot ("SIN INICIAR") can never inflate it...
+            */
+            const priorMilestones = new Set() // origin + every intermediate stop...
+            addPointMilestones(priorMilestones, route?.route_origin, route?.route_origin_events)
+            for (const stop of stops) addPointMilestones(priorMilestones, stop.stop_name, stop.stop_events)
+
+            const destinationMilestones = new Set()
+            addPointMilestones(destinationMilestones, route?.route_destination, route?.route_destination_events)
+
+            const validMilestones  = new Set([...priorMilestones, ...destinationMilestones])
+            const totalRealEvents  = validMilestones.size
+            const perEventValue    = totalRealEvents > 0 ? 100 / totalRealEvents : 0
+
+            /* - Step [6]
+            *  - This update's event overrides everything: selecting CANCELADO always yields
+            *    0% for THIS update (does not permanently block future recalculations).
+            *    Otherwise, the progress is the per-event value times the count of DISTINCT
+            *    real route milestones reached so far (including this one) — re-saving the same
+            *    point/event again, or a non-route event, must not inflate progress. If the
+            *    location being updated IS the destination, origin + every intermediate point
+            *    are treated as already completed (reaching the destination implies everything
+            *    before it happened), so only the destination's own progress still depends on
+            *    which of its events have actually been logged...
+            */
+            const newIsCancelled  = man_current_status.toUpperCase().includes('CANCEL')
+            const existingEvents  = maneuverFound.man_events ?? []
+            const destinationName = route?.route_destination || maneuverFound.man_unload_location
+            const isDestinationUpdate = !!destinationName && man_current_location === destinationName
+
+            let progressPercent = 0
+            if (!newIsCancelled && totalRealEvents > 0)
+            {
+                const reachedMilestones = new Set()
+
+                if (isDestinationUpdate)
                 {
-                    auxFuncModule.logger(function_name, 550,2,1,"[i] Maneuver updated, virtually deleted...")
-                    return res.status(200).send({message:'1'})
-                }                   
-            }).catch((err)=>
+                    for (const milestone of priorMilestones) reachedMilestones.add(milestone)
+                }
+
+                for (let i = 0; i + 3 < existingEvents.length; i += 4)
+                {
+                    const pastKey = (existingEvents[i + 1] ?? '') + '|' + (existingEvents[i + 2] ?? '')
+                    if (validMilestones.has(pastKey)) reachedMilestones.add(pastKey)
+                }
+                const newKey = man_current_location + '|' + man_current_status
+                if (validMilestones.has(newKey)) reachedMilestones.add(newKey)
+
+                progressPercent = Math.min(100, Math.round(reachedMilestones.size * perEventValue))
+            }
+
+            const man_progress = progressPercent + '%'
+            const timestamp     = auxFuncModule.timeSnapshot()
+            const man_events    = [...existingEvents, timestamp, man_current_location, man_current_status, man_progress]
+
+            /* - Step [7]
+            *  - Persist the new location, status, progress and event history...
+            */
+            const updatedManeuver = await maneuverModelItem.findOneAndUpdate(
+                { man_id: man_id },
+                {
+                    $set: {
+                        man_current_location: man_current_location,
+                        man_current_status:   man_current_status,
+                        man_progress:         man_progress,
+                        man_events:           man_events,
+                        man_update_action:    'UPDATED LOCATION',
+                        man_update_source:    'ADMINISTRATOR',
+                        man_update_date:      timestamp
+                    }
+                },
+                { new: false }
+            )
+
+            if (updatedManeuver)
             {
-                auxFuncModule.logger(function_name, 555,3,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            }) 
-        }
-    },
-
-
-
-
-
-    // [ GET ALL MANEUVERS ][⚑]
-    getAllManeuvers: async function(req, res)
-    {
-        let function_name = "getAllManeuvers"
-        auxFuncModule.logger(function_name,569,0)
-
-        /* - Step [1]
-        *  - Search for maneuvers that are not "DELETED"...
-        */
-        await maneuverModelItem.find({maneuver_update_action:{$ne:"DELETED MANEUVER"}}).then((objectsFound)=>
-        {
-            if(objectsFound.length === 0)
-            {
-                auxFuncModule.logger(function_name,578,1,2,"[e] Error while searching...")
-                return res.status(200).send({message:'0'})
+                auxFuncModule.logger(function_name, 7, 7, 1, "[i] MANEUVER location updated...")
+                return res.status(200).send({ code: '1', message: 'Ubicación actualizada correctamente.', man_progress: man_progress })
             }else
             {
-                auxFuncModule.logger(function_name,582,1,1,"[i] Maneuvers found...")
-                return res.status(200).send({objectsFound})
+                auxFuncModule.logger(function_name, 7, 7, 2, "[e] MANEUVER location NOT updated...")
+                return res.status(500).send({ code: '-1', message: 'Error al actualizar la ubicación.' })
+            }
+        }catch(error)
+        {
+            auxFuncModule.logger(function_name, 7, 7, 3, "[e] Maneuver location not processed, PROMISE(S) ERROR...")
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
+        }
+    },
+
+    //[⚑ v2.0][ DELETE MANEUVER BY ID ][ Modificado: 01/07/2026 ]
+    delete_maneuver: async function(req, res)
+    {
+        let function_name = "delete_maneuver"
+        auxFuncModule.logger(function_name, 0, 0)
+
+        /* - Step [1]
+        *  - Receive and sanitize man_id from CLIENT via POST -> BODY
+        */
+        const bodyValues  = req.body
+        const search_id   = auxFuncModule.sanitizeString(bodyValues.man_id) ?? null
+
+        auxFuncModule.logger(function_name, 1, 1, 1, "[i] Input value received and sanitized...")
+
+        /* - Step [2]
+        *  - Validate man_id before proceeding...
+        */
+        if ((search_id ?? '') === '')
+        {
+            auxFuncModule.logger(function_name, 2, 2, 2, "[e] man_id not valid, rejecting request...")
+            return res.status(400).send({ code: '-1', message: 'ID de maniobra no válido.' })
+        }
+
+        /* - Step [3]
+        *  - Search and delete maneuver by man_id...
+        */
+        try
+        {
+            const deletedManeuver = await maneuverModelItem.findOneAndDelete({ man_id: search_id })
+
+            if (!deletedManeuver)
+            {
+                auxFuncModule.logger(function_name, 3, 3, 2, "[e] Maneuver not found, nothing deleted...")
+                return res.status(404).send({ code: '0', message: 'Maniobra no encontrada.' })
             }
 
-        }).catch((err)=>
+            auxFuncModule.logger(function_name, 3, 3, 1, "[i] MANEUVER deleted successfully...")
+            return res.status(200).send({ code: '1', message: 'Maniobra eliminada exitosamente.' })
+        }
+        catch(error)
         {
-            auxFuncModule.logger(function_name,588,1,3,"[e] "+err)
-            return res.status(200).send({message:'0'})  
-        })
-    },
-
-
-
-
-
-    // [ UPDATE MANEUVER GPS TRACKING LINK ][⚑]
-    updateTrackingLink: async function(req, res)
-    {
-        let function_name = "updateTrackingLink"
-        auxFuncModule.logger(function_name,601,0)
-
-        /* - Step [1]
-        *  - Receive values from client request...
-        *  - via -> PATCH -> BODY
-        */
-        let bodyValues = req.body;
-        
-        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
-        {
-            auxFuncModule.logger(function_name,611,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'}) 
-        }else
-        {
-            /* - Step [2]
-            *  - Update maneuver tracking link in DB...
-            */
-            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.man_folio},
-                {man_gpsLink:bodyValues.man_gpsLink},
-                {maneuver_update_action:"UPDATED GPS LINK"},
-                {maneuver_update_source:"ADMINISTRATOR"},
-                {maneuver_update_date:timeSnapshot()},
-            ).then((updatedManeuver) =>
-            {
-                if(!updatedManeuver)
-                {
-                    auxFuncModule.logger(function_name,627,2,2,"[e] Error while searching...")
-                    return res.status(200).send({message:'0'})       
-                }else
-                {
-                    auxFuncModule.logger(function_name,631,2,1,"[i] GPS LINK updated...")
-                    return res.status(200).send({message:'1'})
-                }                   
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name,636,2,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })
-        } 
-    },
-
-
-
-
-
-    // [ GET CLIENT MANEUVERS ][⚑]
-    getClientManeuvers: async function(req, res)
-    {
-        let function_name = "getClientManeuvers"
-        auxFuncModule.logger(function_name,650,0)
-
-        /* - Step [1]
-        *  - Receive SEARCH KEY from client request...
-        *  - via GET -> URL PARAMETER
-        */
-        let search_key = Object.keys(req.query);
-
-        if(!auxFuncModule.isValidValue(search_key))
-        {
-            auxFuncModule.logger(function_name,660,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'})
-        }else
-        {
-            /* - Step [2]
-            *  - Search maneuver in the DB...
-            */
-            await maneuverModelItem.find({man_cliente:search_key[0],maneuver_current_status:{$nin:["100%"]},man_moni_enable:"true"}).then((foundManeuver)=>
-            {   
-                if (foundManeuver.length <= 0)
-                {
-                    auxFuncModule.logger(function_name,671,2,2,"[e] Maneuvers not found...")
-                    return res.status(200).send({message:'0'})
-                }else
-                {
-                    auxFuncModule.logger(function_name,675,2,1,"[i] Sending all found maneuvers...")
-                    return res.status(200).send({foundManeuver})    
-                }
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name,660,2,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })
+            auxFuncModule.logger(function_name, 3, 3, 3, "[e] Promise error: " + error.message)
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
         }
     },
 
-
-
-
-
-    // [ UPDATE MANEUVER MONI ENABLE VALUES ][⚑]
-    updateMoniStatus: async function(req, res)
+    // [⚑ v2.0][ GET ALL MANEUVERS (PAGINATED) ][ Modificado: 01/07/2026 ]
+    get_all_maneuvers: async function(req, res)
     {
-        let function_name = "updateMoniStatus"
-        auxFuncModule.logger(function_name,694,0)
-        
-        /* - Step [1]
-        *  - Receive values from client request...
-        *  - via -> PATCH -> BODY
-        */
-        let bodyValues = req.body;
-        
-        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
-        {
-            auxFuncModule.logger(function_name,704,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'}) 
-        }else
-        {
-            /* - Step [2]
-            *  - Update maneuver in DB...
-            */
-            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.man_folio},
-                {man_moni_enable:bodyValues.man_moni_enable},
-                {maneuver_update_action:"UPDATED MONI STATUS"},
-                {maneuver_update_source:"ADMINISTRATOR"},
-                {maneuver_update_date:timeSnapshot()},
-            ).then((updatedManeuver) =>
-            {
-                if(!updatedManeuver)
-                {
-                    auxFuncModule.logger(function_name,720,2,2,"[e] MONI STATUS not updated...")
-                    return res.status(200).send({message:'0'})       
-                }else
-                {
-                    auxFuncModule.logger(function_name,724,2,1,"[i] MONI STATUS updated...")
-                    return res.status(200).send({message:'1'})
-                }                   
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name,729,2,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })
-        } 
-    },
-
-
-
-
-
-    // [ SEND MANEUVER GPS LOCATION ][⚑]
-    getGPS: async function(req, res)
-    {
-        let function_name = "getGPS"
-        auxFuncModule.logger(function_name,743,0)
-    
-        /* - Step [1]
-        *  - get maneuver ID from client request...
-        *  - via GET -> URL PARAMETER
-        */
-        let searchingValue = Object.keys(req.query);
-
-        if(!auxFuncModule.isValidValue(searchingValue))
-        {
-            auxFuncModule.logger(function_name,753,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'})
-        }else
-        {
-            /* - Step [2]
-            *  - Search maneuver in the DB...
-            */
-            await maneuverModelItem.find({man_folio:searchingValue}).then((foundManeuver)=>
-            {   
-                if (foundManeuver.length <= 0)
-                {
-                    auxFuncModule.logger(function_name,764,2,2,"[e] MAN ID not found...")
-                    return res.status(200).send({message:'0'})
-                }else
-                {
-                    let trackingLink = foundManeuver[0].man_gpsLink
-                    auxFuncModule.logger(function_name,764,2,1,"[i] MAN ID not found...")
-                    return res.status(200).send({trackingLink})    
-                }
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name,774,2,3,"[i] "+err)
-                return res.status(200).send({message:'0'})  
-            })
-        }
-    },
-
-
-
-
-
-    // [ UPDATE MANEUVER LOCATION AND EVENTS ][⚑]
-    updateManeuverEvents: async function(req, res)
-    {
-        let function_name = "updateManeuverEvents"
-        auxFuncModule.logger(function_name,788,0)
+        let function_name = "get_all_maneuvers"
+        auxFuncModule.logger(function_name, 213, 0)
 
         /* - Step [1]
-        *  - Receive searching values from client request...
-        *  - via -> PATCH -> BODY
+        *  - Receive and sanitize pagination params from CLIENT via GET -> QUERY
         */
-        let bodyValues = req.body; //Receive man_folio, man_location, man_event...
+        const queryValues    = req.query
+        const requestedPage  = parseInt(queryValues.page, 10)
+        const requestedLimit = parseInt(queryValues.limit, 10)
+        const page  = Number.isInteger(requestedPage)  && requestedPage  > 0 ? requestedPage  : 1
+        const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 20
+        const skip  = (page - 1) * limit
 
-        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
-        {
-            auxFuncModule.logger(function_name,798,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'}) 
-        }else
+        auxFuncModule.logger(function_name, 225, 1, 1, "[i] Pagination params received: page=" + page + ", limit=" + limit)
+
+        try
         {
             /* - Step [2]
-            *  - Find maneuver in BD...
+            *  - Count total maneuvers stored, needed for pagination metadata...
             */
-            await maneuverModelItem.find({man_folio:bodyValues.man_folio}).then((foundManeuver)=>
-            {   
-                if (foundManeuver.length <= 0)
-                {
-                    auxFuncModule.logger(function_name,809,2,2,"[e] MAN ID not found...")
-                    return res.status(200).send({message:'0'})
-                }else
-                {
-                    /* - Step [3]
-                    *  - Validate if user data is a valid combination...
-                    */
-                    if (processEvent(bodyValues.man_location,bodyValues.man_event).length <= 1) //Means that a valid combination was not found...
-                    {
-                        auxFuncModule.logger(function_name,818,3,2,"[e] Not a valid EVENT combination...")
-                        return res.status(200).send({message:'0'})    
-                    }else
-                    {
-                        let event = processEvent(bodyValues.man_location,bodyValues.man_event)
+            const totalManeuvers = await maneuverModelItem.countDocuments({})
 
-                        let maneuver_finish_date = 'Aún en curso'
+            auxFuncModule.logger(function_name, 234, 2, 1, "[i] Total maneuvers found: " + totalManeuvers)
 
-                        if (event[2] === 'FINALIZADO' || event[3] === '100%') 
-                        {
-                            maneuver_finish_date = timeSnapshot()
-                        }
-
-                        maneuverModelItem.findOneAndUpdate(
-                            { man_folio:bodyValues.man_folio }, // Search Filter...
-                            {
-                            // Update loop...
-                            $push:{maneuver_events:{$each:event}},
-                            $set:
-                                {
-                                    maneuver_current_location:bodyValues.man_location,
-                                    maneuver_current_status:bodyValues.man_event,
-                                    maneuver_update_action:'UPDATED EVENT',
-                                    maneuver_update_source:'ADMINISTRATOR',
-                                    maneuver_update_date:event_time,
-                                    man_termino:maneuver_finish_date
-                                }
-                            }, 
-                            {new:true}
-                        )
-                        .then((updatedManeuver) =>
-                        {
-                            if(!updatedManeuver)
-                            {
-                                auxFuncModule.logger(function_name,852,3,2,"[e] EVENT was not updated...")
-                                return res.status(200).send({message:'0'})       
-                            }else
-                            {
-                                auxFuncModule.logger(function_name,856,3,1,"[i] EVENT updated succesfully...")
-                                return res.status(200).send({message:'1'})
-                            }                   
-                        }).catch((err)=>
-                        {
-                            auxFuncModule.logger(function_name,861,3,3,"[e] "+err)
-                            return res.status(200).send({message:'0'})  
-                        })               
-                    }
-                }
-                
-            }).catch((err)=>
+            if (totalManeuvers === 0)
             {
-                auxFuncModule.logger(function_name,869,3,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })
-                            
-        }
-    },
-
-
-
-
-
-    // [ UPDATE MANEUVER NOTE ][⚑]
-    updateNote: async function(req, res)
-    {
-        let function_name = "updateNote"
-        auxFuncModule.logger(function_name,884,0)
-
-        /* - Step [1]
-        *  - Receive values from client request...
-        *  - via -> PATCH -> BODY
-        */
-        let bodyValues = req.body;
-        
-        if (!auxFuncModule.isValidValue(bodyValues.man_folio)) 
-        {
-            auxFuncModule.logger(function_name,894,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'}) 
-        }else
-        {
-            /* - Step [2]
-            *  - Update maneuver NOTE in DB...
-            */
-    
-            await maneuverModelItem.findOneAndUpdate({man_folio:bodyValues.man_folio},
-                {man_note:bodyValues.man_note},
-                {maneuver_update_action:"UPDATED NOTE"},
-                {maneuver_update_source:"ADMINISTRATOR"},
-                {maneuver_update_date:timeSnapshot()},
-            ).then((updatedManeuver) =>
-            {
-                if(!updatedManeuver)
-                {
-                    auxFuncModule.logger(function_name,911,2,2,"[e] NOTE not updated...")
-                    return res.status(200).send({message:'0'})       
-                }else
-                {
-                    auxFuncModule.logger(function_name,915,2,1,"[i] NOTE updated succesfully...")
-                    return res.status(200).send({message:'1'})
-                }                   
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name,920,2,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })
-        } 
-    },
-
-
-
-
-
-    // [ FIND ONE MANEUVER BY MANEUVER ID ONLY ][⚑]
-    findManeuver: async function(req, res)
-    {
-        let function_name = "findManeuver"
-        auxFuncModule.logger(function_name,934,0)
-    
-        /** - Step [1]
-         *  - get searching value from client...
-         *  - via GET -> URL PARAMETER
-         */
-        let searchingValue = Object.keys(req.query);
-
-        if(!auxFuncModule.isValidValue(searchingValue))
-        {
-            auxFuncModule.logger(function_name,944,1,2,"[e] Empty MAN ID value received...")
-            return res.status(200).send({message:'0'})
-        }else
-        {
-            /** - Step [2]
-             *  - Search maneuver in the DB...
-             */
-            await maneuverModelItem.find({man_folio:searchingValue}).then((foundManeuver)=>
-            {   
-                if (foundManeuver.length <= 0)
-                {
-                    auxFuncModule.logger(function_name,955,2,2,"[e] MAN not found...")
-                    return res.status(200).send({message:'0'})
-                }else
-                {
-                    auxFuncModule.logger(function_name,959,2,1)
-                    return res.status(200).send({foundManeuver})    
-                }
-            }).catch((err)=>
-            {
-                auxFuncModule.logger(function_name,964,2,3,"[e] "+err)
-                return res.status(200).send({message:'0'})  
-            })
-        }
-    },
-
-
-
-
-
-    // [ MASIVE MANEUVERS UPDATE ]
-    updateManeuvers: async function(req, res) 
-    {
-        let function_name = 'updateManeuvers'
-        auxFuncModule.logger(function_name, 1042,0)
-
-        /** - Step [1]
-         *  - Receive maneuvers objects from client...
-         *  - Via PATCH...
-         *  - used CONTENT/TYPE on client request to handle this...!
-         */
-        let body_values = req.body;
-        auxFuncModule.logger(function_name,1050,1,1,"[i] Received objects from client: "+body_values.objects_to_save.length)
-
-        /** - Step [2]
-         *  - Validate values and set defaults...
-         */
-        for (let index = 0; index < body_values.objects_to_save.length; index++) 
-        {
-            auxFuncModule.isValidValue(body_values.objects_to_save[index].man_cliente) ? body_values.objects_to_save[index].man_cliente = body_values.objects_to_save[index].man_cliente : "PENDIENTE" 
-
-            // Maneuver start date assigment...
-            let maneuverStartDate  = auxFuncModule.isValidValue(body_values.objects_to_save[index].man_despacho) ? body_values.objects_to_save[index].man_despacho = body_values.objects_to_save[index].man_despacho : "" 
-            body_values.objects_to_save[index].man_despacho = maneuverStartDate
-            body_values.objects_to_save[index].man_termino  = 'SIN INICIAR'
-
-            body_values.objects_to_save[index].maneuver_update_action = 'UPDATED EVENT'
-            body_values.objects_to_save[index].maneuver_update_source = 'ADMINISTRATOR'
-            body_values.objects_to_save[index].maneuver_update_date   = timeSnapshot()
-
-            //auxFuncModule.logger(function_name,1064,2,1,"[i] "+body_values.objects_to_save[index].man_folio+" Initial values processed")
-        } auxFuncModule.logger(function_name,1005,2,1,"[i] Initial values processed")
-        
-        /** - Step [3]
-         *  - If ECO values are not empty, find respective plates to be updated next...
-         */
-        let found_plates          = []
-        let found_plates_promises = []
-        for (let index = 0; index < body_values.objects_to_save.length; index++) 
-        {
-            // If received ECO is empty, allow to keep empty value...
-            if (!auxFuncModule.isValidValue(body_values.objects_to_save[index].man_eco)) 
-            {
-                found_plates.push(body_values.objects_to_save[index].man_folio)
-                found_plates.push("N/A") 
-
-                auxFuncModule.logger(function_name, 1020,3,1,"[i] "+body_values.objects_to_save[index].man_folio + " ECO selection empty, setting PLATES & ECO to empty value..." );
-            }else
-            {   
-                // If ECO input valid update new plates...
-                const find_plates = objectModelItem.find({object_owner:body_values.objects_to_save[index].man_transportista,object_id:body_values.objects_to_save[index].man_eco}).then((foundObject)=>
-                {
-                    if(!foundObject)
-                    {
-                        auxFuncModule.logger(function_name, 1028,3,3,"[e] "+body_values.objects_to_save[index].man_folio+" Original object not found...")
-                    }else
-                    {
-                        found_plates.push(body_values.objects_to_save[index].man_folio)
-                        found_plates.push(foundObject[0].object_plates) 
-
-                        auxFuncModule.logger(function_name, 1034,3,1,"[i] "+body_values.objects_to_save[index].man_folio+" ECO selection valid, value ready to update...")
-                    } 
-                })
-
-                found_plates_promises.push(find_plates) 
+                auxFuncModule.logger(function_name, 238, 2, 1, "[i] No maneuvers stored in DB...")
+                return res.status(200).send({ code: '0', message: 'No hay maniobras registradas todavía.', maneuvers_data: [], pagination: { page, limit, total: 0, total_pages: 0 } })
             }
-        } 
 
-        /** - Step [4]
-         *  - Wait until plates are found to update new plates on the maneuver document...
-         */
-        let updated_plates_promises = []
-        await Promise.all(found_plates_promises).then(()=>
+            /* - Step [3]
+            *  - Query only the requested page, sorted by most recent first...
+            */
+            const maneuversFound = await maneuverModelItem.find({}).sort({ _id: -1 }).skip(skip).limit(limit).lean()
+
+            auxFuncModule.logger(function_name, 247, 3, 1, "[i] Page query executed, records returned: " + maneuversFound.length)
+
+            return res.status(200).send({
+                code: '1',
+                maneuvers_data: maneuversFound,
+                pagination: { page, limit, total: totalManeuvers, total_pages: Math.ceil(totalManeuvers / limit) }
+            })
+        }catch(error)
         {
-            for (let index = 0; index < body_values.objects_to_save.length; index++) 
-            {
-                const id_2_update = body_values.objects_to_save[index].man_folio 
+            auxFuncModule.logger(function_name, 256, 4, 3, "[e] Promise error: " + error.message)
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
+        }
+    },
 
-                const update_plates = maneuverModelItem.findOneAndUpdate({man_folio: id_2_update},{man_placas: found_plates[(index * 2) + 1 ]}).then((updated_maneuver) =>
-                {
-                    if (!updated_maneuver) 
-                    {
-                        auxFuncModule.logger(function_name, 1056,4,3,"[e] "+id_2_update+" PLATES not updated...")
-                    }else
-                    {
-                        auxFuncModule.logger(function_name, 1059,4,1,"[i] "+id_2_update+" PLATES updated...")
-                    }
-                })
+    // [⚑ v2.0][ GET MANEUVER STATS BY DATE RANGE ][ Modificado: 02/07/2026 ]
+    get_maneuver_stats: async function(req, res)
+    {
+        let function_name = "get_maneuver_stats"
+        auxFuncModule.logger(function_name, 0, 0)
 
-                updated_plates_promises.push(update_plates)
-            } 
-        }) 
+        /* - Step [1]
+        *  - Receive and validate optional date range params from CLIENT via GET -> QUERY
+        */
+        const queryValues = req.query
+        const dateRegex    = /^\d{4}-\d{2}-\d{2}$/
+        const date_from    = queryValues.date_from
+        const date_to      = queryValues.date_to
 
-        /** - Step [5]
-         *  - Once plates update promises are completed update remaining document's fields...
-         */
-        let basic_data_promises = []
-        await Promise.all(updated_plates_promises).then(()=>
+        if ((date_from && !dateRegex.test(date_from)) || (date_to && !dateRegex.test(date_to)))
         {
-            for (let index = 0; index < body_values.objects_to_save.length; index++) 
-            {     
-               const id_2_update = body_values.objects_to_save[index].man_folio
-            
-                // Find original stored documents to keep original values in case new data is not valid...
-                const find_original_maneuver = maneuverModelItem.find({man_folio:id_2_update},{_id:0,__v:0}).then((found_original_maneuver) =>
-                {
-                    if (!found_original_maneuver) 
-                    {                        
-                        auxFuncModule.logger(function_name, 1142,5,3)
-                    }else
-                    {
-                        // Convert MONGO result to PLAIN JS OBJECT so it can be handled...!
-                        let original_object = found_original_maneuver[0].toObject()
-
-                        // Check for a valid event combination...
-                        let size_of_event = auxFuncModule.isValidValue(processEvent(body_values.objects_to_save[index].maneuver_current_location,body_values.objects_to_save[index].maneuver_current_status))
-                        if(size_of_event) 
-                        {
-                            body_values.objects_to_save[index].maneuver_events = processEvent(body_values.objects_to_save[index].maneuver_current_location,body_values.objects_to_save[index].maneuver_current_status)
-                            body_values.objects_to_save[index].maneuver_events[body_values.objects_to_save[index].maneuver_events.length-1] === '100%' ?
-                            body_values.objects_to_save[index].man_termino = timeSnapshot()
-                            :
-                            body_values.objects_to_save[index].man_termino = 'Aún en curso'
-                            if (!allowAddNewEvent(original_object.maneuver_events[original_object.maneuver_events.length-3],original_object.maneuver_events[original_object.maneuver_events.length-2],body_values.objects_to_save[index].maneuver_current_location,body_values.objects_to_save[index].maneuver_current_status)) 
-                            {
-                                auxFuncModule.logger
-                                (
-                                    function_name,1098,5,1,
-                                    "[i] "+body_values.objects_to_save[index].man_folio+ " Event is already last, not updating..."
-                                    +"\nNew location : "+body_values.objects_to_save[index].maneuver_current_location
-                                    +"\nNew status   : "+body_values.objects_to_save[index].maneuver_current_status
-                                    +"\nNew events   : "+body_values.objects_to_save[index].maneuver_events
-                                    +"\nLast events  : "+original_object.maneuver_events.slice(original_object.maneuver_events.length - 4) 
-                                )
-
-                                body_values.objects_to_save[index].maneuver_events = []
-
-                            }else
-                            {
-                                auxFuncModule.logger
-                                (
-                                    function_name,1112,5,1,
-                                    "[i] "+body_values.objects_to_save[index].man_folio+ " Valid event, new values ready to update..."
-                                    +"\nNew location:"+body_values.objects_to_save[index].maneuver_current_location
-                                    +"\nNew status  :"+body_values.objects_to_save[index].maneuver_current_status
-                                    +"\nNew events  :"+body_values.objects_to_save[index].maneuver_events
-                                )
-                            }
-
-                        }else
-                        {
-                            auxFuncModule.logger
-                            (
-                                function_name,1124,5,1,
-                                "[i] "+body_values.objects_to_save[index].man_folio+ " No valid event, keeping previous values..."
-                                +"\nKeeping location       :"+original_object.maneuver_current_location
-                                +"\nKeeping status         :"+original_object.maneuver_current_status
-                                +"\nKeeping previous event :"+original_object.maneuver_events
-                            )
-
-                            body_values.objects_to_save[index].maneuver_current_location = original_object.maneuver_current_location
-                            body_values.objects_to_save[index].maneuver_current_status   = original_object.maneuver_current_status
-                            body_values.objects_to_save[index].maneuver_events           = original_object.maneuver_events
-
-                        }
-
-                        // Check if LOCATION and STATUS are valid values...
-                        body_values.objects_to_save[index].maneuver_current_location != 'SIN INICIAR' ? 
-                        (
-                            //New values to be updated...
-                            body_values.objects_to_save[index].maneuver_current_location = body_values.objects_to_save[index].maneuver_current_location,
-                            body_values.objects_to_save[index].maneuver_current_status   = body_values.objects_to_save[index].maneuver_current_status,  
-                            auxFuncModule.logger(function_name,1143,5,1,"[i] "+body_values.objects_to_save[index].man_folio + " CURRENT LOCATION & CURRENT STATUS, ready to be updated, waiting for event result...")
-                        )
-                        :
-                        (
-                            // Set to MANEUVER DEFAULT START values...
-                            body_values.objects_to_save[index].maneuver_current_location = "SIN INICIAR",
-                            body_values.objects_to_save[index].maneuver_current_status   = "SIN INICIAR",
-                            body_values.objects_to_save[index].maneuver_events = processEvent(body_values.objects_to_save[index].maneuver_current_location,body_values.objects_to_save[index].maneuver_current_status),
-                            auxFuncModule.logger(function_name,1151,5,1,"[i] "+body_values.objects_to_save[index].man_folio + " CURRENT LOCATION & CURRENT STATUS, Set to default starting eventy values...")
-                        )
-
-                        // Check if OPERATOR value is valid...
-                        auxFuncModule.isValidValue(body_values.objects_to_save[index].man_operador)? 
-                        (
-                            // New values to be updated...
-                            body_values.objects_to_save[index].man_operador = body_values.objects_to_save[index].man_operador,
-                            auxFuncModule.logger(function_name,1159,5,1,"[i] "+body_values.objects_to_save[index].man_folio+ " OPERATOR ready to be updated...")
-                        )
-                        :
-                        (
-                            auxFuncModule.logger(function_name, 1163,5,1,"[i] "+body_values.objects_to_save[index].man_folio+" Keeping previous OPERATOR value..."+ 
-                            "\nORIGINAL: -> "+original_object.man_operador + 
-                            "\nRECEIVED: -> "+body_values.objects_to_save[index].man_operador 
-                            ),
-
-                            // Keep previous values...
-                            body_values.objects_to_save[index].man_operador = original_object.man_operador
-                        )
-
-                        // Get visibility value ready...
-                        auxFuncModule.isValidValue(body_values.objects_to_save[index].man_moni_enable) ? 'true' : 'false' 
-                }
-            }) 
-
-            basic_data_promises.push(find_original_maneuver)
-
-            }
-        }) 
-
-        /** - Step [6]
-         *  - Wait to all maenuvers to be updated...
-         *  - When finished, send answer to client...
-         */ 
-        let update_promises = []
-         await Promise.all(basic_data_promises).then(()=>
+            auxFuncModule.logger(function_name, 0, 1, 2, "[e] Invalid date format received...")
+            return res.status(400).send({ code: '-1', message: 'Formato de fecha inválido, use YYYY-MM-DD.' })
+        }
+        if (date_from && date_to && date_from > date_to)
         {
-             for (let index = 0; index < body_values.objects_to_save.length; index++) 
-            {
-                const object_to_save                        = body_values.objects_to_save[index];
-                const { maneuver_events, ...fields_to_set } = object_to_save;
-                const id_2_update = body_values.objects_to_save[index].man_folio 
+            auxFuncModule.logger(function_name, 0, 1, 2, "[e] Invalid date range, date_from > date_to...")
+            return res.status(400).send({ code: '-1', message: 'El rango de fechas es inválido.' })
+        }
 
-                if (body_values.objects_to_save[index].maneuver_current_location === "SIN INICIAR") 
-                {
-                    const update_individual_maneuver = maneuverModelItem.findOneAndUpdate(
-                    {man_folio: id_2_update},
-                    {  
-                        $set: body_values.objects_to_save[index] 
-                    }).then((updated_maneuver) =>
-                        {
-                            if (!updated_maneuver) 
-                            {
-                                auxFuncModule.logger(function_name, 1205,5,3)
-                            }else
-                            {
-                                auxFuncModule.logger(function_name, 1208,5,1,"[i] "+body_values.objects_to_save[index].man_folio + " Updated succesfully..." );
-                            }
-                        })
+        const dateFilter = {}
+        if (date_from) dateFilter.$gte = date_from
+        if (date_to)   dateFilter.$lte = date_to
+        const baseMatch = Object.keys(dateFilter).length > 0 ? { man_dispatch_date: dateFilter } : {}
 
-                    update_promises.push(update_individual_maneuver) 
-                }else
-                {
-                    const update_individual_maneuver = maneuverModelItem.findOneAndUpdate(
-                    {man_folio: id_2_update},
-                    {   $push:{maneuver_events:{$each:body_values.objects_to_save[index].maneuver_events}},
-                        //$set: body_values.objects_to_save[index]
-                        $set: fields_to_set
-                    }).then((updated_maneuver) =>
-                    {
-                        if (!updated_maneuver) 
-                        {
-                            auxFuncModule.logger(function_name, 1224,5,3)
-                        }else
-                        {
-                            auxFuncModule.logger(function_name, 1227,5,1,"[i] "+body_values.objects_to_save[index].man_folio + " Updated succesfully..." );
-                        }
-                    })
-                    update_promises.push(update_individual_maneuver) 
-                }
-            } 
-        }) 
+        auxFuncModule.logger(function_name, 0, 1, 1, "[i] Date range validated: date_from=" + date_from + ", date_to=" + date_to)
 
-        await Promise.all(update_promises).then(()=>
+        try
         {
-            res.send({message:'1'})
-        }) 
-    }
+            /* - Step [2]
+            *  - Compute aggregated counts directly in DB, no documents transferred...
+            */
+            const [total, canceladas, sinIniciar] = await Promise.all([
+                maneuverModelItem.countDocuments(baseMatch),
+                maneuverModelItem.countDocuments({ ...baseMatch, man_current_status: { $regex: /cancel/i } }),
+                maneuverModelItem.countDocuments({ ...baseMatch, man_current_status: { $not: /cancel/i }, man_progress: '0%' }),
+            ])
+            const activas = total - canceladas - sinIniciar
+
+            auxFuncModule.logger(function_name, 0, 2, 1, "[i] Stats calculados: total=" + total + " activas=" + activas + " sin_iniciar=" + sinIniciar + " canceladas=" + canceladas)
+            return res.status(200).send({ code: '1', stats: { total, activas, sin_iniciar: sinIniciar, canceladas } })
+        }
+        catch (error)
+        {
+            auxFuncModule.logger(function_name, 0, 3, 3, "[e] Promise error: " + error.message)
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
+        }
+    },
 
 //#endregion [ v1.2 CONTROLLER ]
 
@@ -1224,82 +522,10 @@ var controller = {
 
 module.exports = controller
 
-//#region [⚑] [ LOCAL COMMON AUX FUNCTIONS ]
-
-/** [⚑ V1.2][ TIME SNAPSHOT ]
- *  @returns String date-time value
- *  @note es-mx language used as default 
- */
-function timeSnapshot()
-{
-    const dateTime = new Date()
-
-    const day     = dateTime.getDate() < 10 ? '0' + dateTime.getDate() : dateTime.getDate() 
-    const month   = dateTime.toLocaleString('es-mx',{month:'long'}).toUpperCase()
-    const year    = dateTime.getFullYear()
-    const hours   = dateTime.getHours()   < 10 ? "0" + dateTime.getHours()   : dateTime.getHours()
-    const minutes = dateTime.getMinutes() < 10 ? "0" + dateTime.getMinutes() : dateTime.getMinutes()
-    const seconds = dateTime.getSeconds() < 10 ? "0" + dateTime.getSeconds() : dateTime.getSeconds()
-
-    const timeSnapshot = day +"-"+month+"-"+year+"  "+hours+":"+minutes+":"+seconds
-
-    return timeSnapshot
-}
-
-/** [⚑ V1.2][ TIME FORMAT ]
- *  @returns String date-time value
- *  @note es-mx language used as default 
- */
-function formatTime(time2format)
-{
-    if (time2format != 'PENDIENTE') 
-    {
-        const dateTime = new Date(time2format)
-
-        const day     = dateTime.getDate() < 10 ? '0' + dateTime.getDate() : dateTime.getDate() 
-        const month   = dateTime.toLocaleString('es-mx',{month:'long'}).toUpperCase()
-        const year    = dateTime.getFullYear()
-        const hours   = dateTime.getHours()   < 10 ? "0" + dateTime.getHours()   : dateTime.getHours()
-        const minutes = dateTime.getMinutes() < 10 ? "0" + dateTime.getMinutes() : dateTime.getMinutes()
-        const seconds = dateTime.getSeconds() < 10 ? "0" + dateTime.getSeconds() : dateTime.getSeconds()
-
-        const timeSnapshot = day +"-"+month+"-"+year+"  "+hours+":"+minutes+":"+seconds
-
-        return timeSnapshot
-   
-    }else
-    {
-        return 'PENDIENTE'
-    }
-}
-
-/** [⚑ V1.2][ CHECK FOR NEW EVENT VALID ]
- * @param {*} prev_location 
- * @param {*} prev_status 
- * @param {*} new_location 
- * @param {*} new_status 
- * @returns TRUE IF ALLOWED TO STORE NEW EVENT
- */
-function allowAddNewEvent(prev_location, prev_status,new_location, new_status)
-{
-    if (prev_location === new_location && prev_status === new_status) 
-    {
-        return false
-    }else
-    {
-        return true
-    }
-}
-
-/** [⚑ V1.2][ AUTOMATIC MANEUVER PROGRESS ASSIGMENT ]
- * 
- * @param {*} location 
- * @param {*} event 
- * @returns Simple Array [date-time, location, status, percentage] 
- */
+/*
 function processEvent(location, event) 
 {
-    const event_time = timeSnapshot()
+    const event_time = auxFuncModule.timeSnapshot()
 
     let updatedEvent 
     switch (true) 
@@ -1385,61 +611,4 @@ function processEvent(location, event)
         break;
     }
     return updatedEvent
-}
-
-/** [⚑ V1.2] [ DYNAMIC MANEUVER ID GENERATOR ] 
- *  @returns String "fullID"
- *  @param String operator
- *  @param String customer
- *  @param String date
- */
-function generateIDHeader(operator, customer, date)
-{
-    /* - Step [1]
-    *  - Get two first characters of OPERATOR...
-    */
-    var opFirstLetter  = operator.charAt(0).toUpperCase()
-    var opSecondLetter = ''
-
-    var secondWordStartIndex = operator.indexOf(' ')
-    if (secondWordStartIndex == -1) 
-    {
-        opSecondLetter = operator.charAt(1).toUpperCase()
-    }else
-    {
-        opSecondLetter = operator.charAt(secondWordStartIndex+1).toUpperCase()
-    }
-
-    /* - Step [2]
-    *  - Get two first characters of CUSTOMER...
-    */
-    var cusFirstLetter  = customer.charAt(0).toUpperCase()
-    var cusSecondLetter = ''
-
-    secondWordStartIndex = customer.indexOf(' ')
-    if (secondWordStartIndex == -1) 
-    {
-        cusSecondLetter = customer.charAt(1).toUpperCase()
-    }else
-    {
-        cusSecondLetter = customer.charAt(secondWordStartIndex+1).toUpperCase()
-    }
-
-    /* - Step [3]
-    *  - Get date values...
-    */
-    var dateSection = date.substring(2,4) + date.substring(5,7) + date.substring(8,10)
-
-    /** - Step [4]
-     *  - Generate FULL ID string...
-     */
-    var IDheader = cusFirstLetter+
-    cusSecondLetter+
-    opFirstLetter+ 
-    opSecondLetter+
-    dateSection
-
-    return IDheader
-}
-
-//#endregion [ [⚑] LOCAL AUX FUNCTIONS ]
+}*/

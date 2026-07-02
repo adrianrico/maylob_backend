@@ -11,7 +11,7 @@ var controller = {
 
 //#region [ v1.2 CONTROLLER ]
 
-    //[?][ CREATE OPERATOR ]
+    //[⚑][ CREATE OPERATOR ]
     create_operator: async function(req,res)
     {
         let function_name = 'create_operator'
@@ -64,7 +64,7 @@ var controller = {
 
 
 
-    //[?][ READ OPERATORS ]
+    //[⚑][ READ OPERATORS ]
     read_operator: async function(req,res)
     {
         let function_name = 'read_operator'

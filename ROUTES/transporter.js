@@ -3,18 +3,20 @@
 var express = require('express')
 
 var transporterController = require('../CONTROLLERS/transporter')
-const { model } = require('mongoose')
-
 var router = express.Router()
 
 //#region [ TRANSPORTER ROUTES ]
 
-// CREATE new TRANSPORTER...
-router.post('/createTransporter/',transporterController.create_transporter)
+// Create or update object...
+router.post('/transporter/',transporterController.handle_transporter)
+router.post('/operator/',transporterController.handle_operator)
+router.post('/eco/',transporterController.handle_eco)
 
-// READ all TRANSPORTER...
-//router.get('/readTransporters/',transporterController.read_transporters)
-router.post('/readTransporters/',transporterController.read_transporters)
+// Read objects...
+router.get('/transporter/',transporterController.read_transporters)
+
+// Delete objects...
+router.delete('/transporter/',transporterController.delete_transporter)
 
 //#endregion [ TRANSPORTER ROUTES ]
 

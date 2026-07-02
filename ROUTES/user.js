@@ -3,8 +3,6 @@
 var express = require('express')
 
 var userController = require('../CONTROLLERS/user')
-const { model } = require('mongoose')
-
 var router = express.Router()
 
 //#region [ CONTROLLER ROUTES ]

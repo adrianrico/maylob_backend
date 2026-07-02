@@ -3,8 +3,6 @@
 var express = require('express')
 
 var operatorController = require('../CONTROLLERS/operator')
-const { model } = require('mongoose')
-
 var router = express.Router()
 
 //#region [ OPERATOR ROUTES ]

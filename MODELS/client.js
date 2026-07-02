@@ -11,8 +11,9 @@ var schema = mongoose.Schema
 var clientSchema = schema({
     client_id: String,
     client_name: String,
-    client_priority:String,
-    client_registration:String,
+    client_phone:String,
+    client_email:String,
+    client_last_update:String,
     client_status:String
 })
 

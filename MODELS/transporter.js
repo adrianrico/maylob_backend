@@ -15,11 +15,11 @@ var transporterSchema= schema({
     transporter_priority: String,
     transporter_registration: String,
     transporter_equipment:{
-        type:[String],
+        type:[Object],
         default:[]
     },
     transporter_operators:{
-        type:[String],
+        type:[Object],
         default:[]
     },
 })

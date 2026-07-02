@@ -24,13 +24,13 @@ var controller = {
          *   - via POST -> BODY
          */
 
-        let bodyValues = req.body
-        
-        newUser.user_email      = bodyValues.user_email,      
-        newUser.user_name       = bodyValues.user_name,       
-        newUser.user_phone      = bodyValues.user_phone,
-        newUser.user_priority   = bodyValues.user_priority,
-        newUser.user_privilege  = bodyValues.user_privilege
+        const bodyValues = req.body
+
+        newUser.user_email     = auxFuncModule.sanitizeEmail(bodyValues.user_email)              ?? null
+        newUser.user_name      = auxFuncModule.sanitizeName(bodyValues.user_name)?.toUpperCase() ?? ''
+        newUser.user_phone     = auxFuncModule.sanitizePhone(bodyValues.user_phone)              ?? ''
+        newUser.user_priority  = auxFuncModule.sanitizeString(bodyValues.user_priority)          ?? ''
+        newUser.user_privilege = auxFuncModule.sanitizeString(bodyValues.user_privilege)         ?? ''
 
         // Default MONI is available to new users...
         let userModules = ['MONI']
@@ -54,7 +54,7 @@ var controller = {
             {
                 if(foundObject)
                 {                    
-                    auxFuncModule,auxFuncModule.logger("addUser",3,3)
+                    auxFuncModule.logger("addUser",3,3)
                     return res.status(200).send({message:'0'}) 
                 }else
                 {   
@@ -85,9 +85,10 @@ var controller = {
          *  - Receive value from client request...
          *  - Via POST -> URL PARAMETER...
          */
-        let searchingValue = Object.keys(req.query);
+        const rawQuery    = Object.keys(req.query)
+        const searchEmail = auxFuncModule.sanitizeEmail(rawQuery[0] ?? '')
 
-        if (!auxFuncModule.isValidValue(searchingValue))     
+        if (!auxFuncModule.isValidValue(searchEmail))
         {
             auxFuncModule.logger("getUserModules",3,1)
             return res.status(200).send({message:'0'})
@@ -97,7 +98,7 @@ var controller = {
              *  - Actual search in DB...
              *  - Return all modules if user found...
              */
-            await userModelItem.findOne({user_email:searchingValue[0]}).then((foundObject) =>
+            await userModelItem.findOne({user_email: searchEmail}).then((foundObject) =>
             {    
                 if(!foundObject)
                 {
@@ -112,7 +113,7 @@ var controller = {
                         userModules.push(element)    
                     });
             
-                    auxFuncModule("getUserModules",2,2)
+                    auxFuncModule.logger("getUserModules",2,2)
                     return res.status(200).send({userModules})
                 }    
             }).catch((err)=>

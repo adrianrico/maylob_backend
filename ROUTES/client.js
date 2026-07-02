@@ -3,23 +3,18 @@
 var express = require('express')
 
 var clientController = require('../CONTROLLERS/client')
-const { model } = require('mongoose')
-
 var router = express.Router()
 
 //#region [ CLIENT ROUTES ]
 
-// CREATE new client...
-router.post('/createClient/',clientController.create_client)
+// Create or update object...
+router.post('/client/',clientController.handle_client)
 
-// READ all clients...
-router.get('/readClients/',clientController.read_clients)
+// Read objects...
+router.get('/client/',clientController.read_clients)
 
-// CREATE new client...
-router.patch('/updateClient/',clientController.update_client)
-
-// DELETE new client...
-router.delete('/deleteClient/',clientController.delete_client)
+// Delete objects...
+router.delete('/client/',clientController.delete_client)
 
 //#endregion [ CLIENT ROUTES ]
 
