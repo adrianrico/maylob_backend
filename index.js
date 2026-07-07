@@ -1,16 +1,21 @@
 'use strict'
 
+require('dotenv').config()
+
 var mongoose    = require('mongoose')
 var app         = require('./app')
-var port        = 8080
+
+var isLocal  = process.env.APP_ENV === 'local'
+var port     = isLocal ? process.env.PORT_LOCAL : process.env.PORT_PRODUCTION
+var mongoUri = isLocal ? process.env.MONGO_URI_LOCAL : process.env.MONGO_URI_PRODUCTION
 
 // [1] DATABASE CONNECTION PROMISE ONLY...
 mongoose.Promise= global.Promise
 
-// [2] DATABASE CONNECTION TO ONLINE SERVER... 
-mongoose.connect('mongodb+srv://maylobcontrol:HzZf2OWCKGMzpJAz@maylobdb.u424k.mongodb.net/?retryWrites=true&w=majority&appName=maylobDB')
+// [2] DATABASE CONNECTION (según APP_ENV: local | production)...
+mongoose.connect(mongoUri)
     .then(()=>{
-        console.log("[⚑][SERVER] - Conexión a BD: ok")
+        console.log(`[⚑][SERVER] - Conexión a BD (${process.env.APP_ENV}): ok`)
         app.listen(port,()=>{
             console.log("[⚑][SERVER] - Corriendo en puerto: "+port)
         })

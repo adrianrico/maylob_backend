@@ -3,6 +3,7 @@
 //Import required MODEL SCHEMAS from models MODULE...
 let maneuverModelItem  = require('../MODELS/maneuver.js')
 let routeModelItem     = require('../MODELS/c_routes.js')
+let clientModelItem    = require('../MODELS/client.js')
 
 // Import auxiliary functions MODULE...
 let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
@@ -93,6 +94,15 @@ var controller =
 
             auxFuncModule.logger(function_name, 84, 3, 1, "[i] Route resolved via: " + (man_route_id ? "custom route lookup" : (man_route ? "client-provided object" : "none")))
 
+            /* - Step [3.1]
+            *  - man_moni_key mirrors the assigned client's client_id, so every maniobra
+            *    assigned to the same client shares the same MONI key...
+            */
+            const clientFound = await clientModelItem.findOne({ client_id: man_client })
+            const man_moni_key = clientFound?.client_id ?? 'NO KEY'
+
+            auxFuncModule.logger(function_name, 84, 3, 1, "[i] man_moni_key resolved: " + man_moni_key)
+
             const maneuverObjectFound = await maneuverModelItem.find({ man_id: newManeuverObject.man_id })
 
             auxFuncModule.logger(function_name, 89, 4, 1, "[i] Query executed, matches found: " + maneuverObjectFound.length)
@@ -111,7 +121,7 @@ var controller =
                     newManeuverObject.man_update_date      = auxFuncModule.timeSnapshot()
                     newManeuverObject.man_current_location = man_current_location
                     newManeuverObject.man_current_status   = man_current_status
-                    newManeuverObject.man_moni_key         = 'NO KEY'
+                    newManeuverObject.man_moni_key         = man_moni_key
                     newManeuverObject.man_progress         = '0%'
                     newManeuverObject.man_events           = [auxFuncModule.timeSnapshot(), man_current_location, man_current_status, newManeuverObject.man_progress]
 
@@ -159,6 +169,7 @@ var controller =
                                 man_gps_link:            newManeuverObject.man_gps_link,
                                 man_transporter:         newManeuverObject.man_transporter,
                                 man_moni_enable:         man_moni_enable,
+                                man_moni_key:            man_moni_key,
                                 man_containers:          man_containers,
                                 man_intermediate_stops:  man_intermediate_stops,
                                 man_route:               man_route !== null ? man_route : undefined,
@@ -458,6 +469,68 @@ var controller =
         }catch(error)
         {
             auxFuncModule.logger(function_name, 256, 4, 3, "[e] Promise error: " + error.message)
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
+        }
+    },
+
+    // [⚑ v1.0][ GET MANEUVERS BY MONITOR KEY (READ ONLY, PUBLIC) ][ Creado: 07/07/2026 ]
+    get_maneuvers_by_key: async function(req, res)
+    {
+        let function_name = "get_maneuvers_by_key"
+        auxFuncModule.logger(function_name, 0, 0)
+
+        /* - Step [1]
+        *  - FIRST LINE OF DEFENSE: reject anything that is not a plain string.
+        *    Express turns query params like ?key[$ne]=x into an OBJECT, so this
+        *    check alone blocks NoSQL operator injection before it reaches sanitizeId...
+        */
+        const rawKey = req.query.key
+
+        if (typeof rawKey !== 'string')
+        {
+            auxFuncModule.logger(function_name, 0, 1, 2, "[e] key param missing or not a string, rejecting request...")
+            return res.status(400).send({ code: '-1', message: 'Llave no válida.' })
+        }
+
+        /* - Step [2]
+        *  - Sanitize with the official ID sanitizer (allowlist [a-zA-Z0-9_-], max 100).
+        *    Anything outside the allowlist is stripped; an empty or placeholder
+        *    result is treated as a rejected key...
+        */
+        const cleanKey = auxFuncModule.sanitizeId(rawKey)
+
+        if (!cleanKey || cleanKey === 'NO KEY')
+        {
+            auxFuncModule.logger(function_name, 0, 2, 2, "[e] key sanitized to empty/placeholder, rejecting request...")
+            return res.status(400).send({ code: '-1', message: 'Llave no válida.' })
+        }
+
+        auxFuncModule.logger(function_name, 0, 2, 1, "[i] Key received and sanitized...")
+
+        try
+        {
+            /* - Step [3]
+            *  - Query by EQUALITY ONLY against the already-sanitized value. Never
+            *    $where, never a regex built from input, never request objects
+            *    inside the filter. Projection excludes man_moni_key so the key
+            *    never travels back in the response...
+            */
+            const maneuversFound = await maneuverModelItem.find(
+                { man_moni_key: cleanKey, man_moni_enable: 'true' },
+                { man_moni_key: 0 }
+            ).sort({ _id: -1 }).lean()
+
+            auxFuncModule.logger(function_name, 0, 3, 1, "[i] Query executed, matches found: " + maneuversFound.length)
+
+            if (maneuversFound.length === 0)
+            {
+                return res.status(200).send({ code: '0', message: 'Llave sin maniobras activas o inválida.', maneuvers_data: [] })
+            }
+
+            return res.status(200).send({ code: '1', maneuvers_data: maneuversFound })
+        }catch(error)
+        {
+            auxFuncModule.logger(function_name, 0, 4, 3, "[e] Promise error: " + error.message)
             return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
         }
     },

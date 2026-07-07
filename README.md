@@ -14,6 +14,13 @@
 >- [⚑] Boolean variables **must** be handled lower case...
 >- [⚑] Only LOCAL AUX FUNCTIONS have params description...
 
+>## MODO LOCAL vs PRODUCCIÓN
+>- [⚑] La configuración vive en `.env` (no se sube a git; usa `.env.example` como plantilla).
+>- [⚑] Para alternar de modo solo se cambia una línea en `.env`: `APP_ENV=local` o `APP_ENV=production`.
+>- [⚑] **local** → conecta a MongoDB local (`MONGO_URI_LOCAL`, por defecto `mongodb://127.0.0.1:27017/maylobdb`).
+>- [⚑] **production** → conecta a MongoDB Atlas (`MONGO_URI_PRODUCTION`).
+>- [⚑] En el proveedor donde se despliega "en línea" hay que configurar las mismas variables de entorno (`APP_ENV`, `PORT_PRODUCTION`, `MONGO_URI_PRODUCTION`) en su panel, ya que `.env` no viaja con el repo.
+
 >## TO DO
 >- Clean obsolete controllers from each file...
 >- Make Uniform routes: Remove all prefixes...
