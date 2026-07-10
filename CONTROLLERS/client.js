@@ -24,6 +24,8 @@ var controller = {
         const bodyValues       = req.body
         const search_client_id = auxFuncModule.sanitizeString(bodyValues.client_id)                ?? null
         const client_name      = auxFuncModule.sanitizeName(bodyValues.client_name)?.toUpperCase() ?? null
+        const phone_provided   = auxFuncModule.isValidValue(bodyValues.client_phone)
+        const email_provided   = auxFuncModule.isValidValue(bodyValues.client_email)
         const client_phone     = auxFuncModule.sanitizePhone(bodyValues.client_phone)              ?? 'TELEFONO NO REGISTRADO'
         const client_email     = auxFuncModule.sanitizeEmail(bodyValues.client_email)              ?? 'CORREO NO REGISTRADO'
         const client_status    = auxFuncModule.sanitizeString(bodyValues.client_status)?.toUpperCase() ?? null
@@ -37,6 +39,21 @@ var controller = {
         {
             auxFuncModule.logger(function_name, 37, 2, 2, "[e] client_name not valid, rejecting request...")
             return res.status(400).send({code:'0', message:'Entrada de nombre debe contener un valor válido.'})
+        }
+
+        /* - Step [2b]
+        *  - A phone/email WAS submitted but failed its format check — reject instead of
+        *  - silently swapping it for the "NO REGISTRADO" placeholder with a success response.
+        */
+        if (phone_provided && client_phone === 'TELEFONO NO REGISTRADO')
+        {
+            auxFuncModule.logger(function_name, 40, 2, 2, "[e] client_phone format invalid, rejecting request...")
+            return res.status(400).send({code:'0', message:'El teléfono no tiene un formato válido.'})
+        }
+        if (email_provided && client_email === 'CORREO NO REGISTRADO')
+        {
+            auxFuncModule.logger(function_name, 41, 2, 2, "[e] client_email format invalid, rejecting request...")
+            return res.status(400).send({code:'0', message:'El correo no tiene un formato válido.'})
         }
 
         try
@@ -96,7 +113,8 @@ var controller = {
                     return res.status(200).send({code:'1', message:'Sin cambios detectados.'})
                 }
 
-                diff.client_id          = new_client_id
+                // client_id must stay stable across updates — Maniobras/Rutas reference clients
+                // by this id, so it must never change once assigned at creation.
                 diff.client_last_update = auxFuncModule.timeSnapshot()
 
                 auxFuncModule.logger(function_name, 93, 4, 1, "[i] Changes detected, UPDATING fields: " + Object.keys(diff))

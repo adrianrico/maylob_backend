@@ -223,7 +223,9 @@ var controller = {
         const operator_tr_id = auxFuncModule.sanitizeString(bodyValues.operator_tr_id)              ?? null
         const operator_name  = auxFuncModule.sanitizeName(bodyValues.operator_name)?.toUpperCase()  ?? null
         const operator_id    = auxFuncModule.sanitizeString(bodyValues.operator_id)                 ?? null
-        const operator_rfc   = auxFuncModule.sanitizeString(bodyValues.operator_rfc)?.toUpperCase() ?? null
+        // CURP is now the operator's identity: normalized (uppercase, no spaces) so the
+        // same person always maps to the same operator_id no matter how it was typed.
+        const operator_curp  = auxFuncModule.sanitizeString(bodyValues.operator_curp)?.toUpperCase().replace(/\s+/g, '') ?? null
         const action         = auxFuncModule.sanitizeString(bodyValues.action)?.toLowerCase()       ?? null
 
         auxFuncModule.logger(function_name, 214, 1, 1, "[i] Values received and sanitized...")
@@ -251,6 +253,11 @@ var controller = {
             {
                 auxFuncModule.logger(function_name, 236, 2, 2, "[e] operator_name not valid, rejecting request...")
                 return res.status(400).send({code: '-1', message: 'Entrada de NOMBRE debe contener algún valor válido.'})
+            }
+            if (!auxFuncModule.isValidValue(operator_curp))
+            {
+                auxFuncModule.logger(function_name, 237, 2, 2, "[e] operator_curp not valid, rejecting request...")
+                return res.status(400).send({code: '-1', message: 'El CURP del operador es obligatorio.'})
             }
         }
 
@@ -306,19 +313,38 @@ var controller = {
             }
 
             // [ CREATE or UPDATE ] — explicit field whitelist (no body spreading)
-            const found_operator    = storedOperators.find(op => op.operator_id === operator_id)
-            const operator_rfc_safe = auxFuncModule.sanitizeString(bodyValues.operator_rfc)?.toUpperCase() ?? ''
-            const operator_avail    = bodyValues.operator_available !== false
+            const found_operator        = storedOperators.find(op => op.operator_id === operator_id)
+            const operator_rfc_safe     = auxFuncModule.sanitizeString(bodyValues.operator_rfc)?.toUpperCase()     ?? ''
+            const operator_nss_safe     = auxFuncModule.sanitizeString(bodyValues.operator_nss)?.toUpperCase()     ?? ''
+            const operator_license_safe = auxFuncModule.sanitizeString(bodyValues.operator_license)?.toUpperCase() ?? ''
+            const operator_address_safe = auxFuncModule.sanitizeString(bodyValues.operator_address)                ?? ''
+            const operator_avail        = bodyValues.operator_available !== false
+
+            // CURP doubles as the ID: block duplicates across the whole fleet, but allow
+            // re-submitting the same record unchanged (it already owns this CURP).
+            if (!found_operator || found_operator.operator_curp !== operator_curp)
+            {
+                const curpTaken = await transporterModelItem.findOne({'transporter_operators.operator_id': operator_curp})
+                if (curpTaken)
+                {
+                    auxFuncModule.logger(function_name, 297, 4, 2, "[e] operator_curp already registered, rejecting request...")
+                    return res.status(409).send({code: '-1', message: 'Ya existe un operador registrado con ese CURP.'})
+                }
+            }
 
             // [ CREATE ] — operator not found in array
             if (!auxFuncModule.isValidValue(found_operator))
             {
-                const op_id       = auxFuncModule.createId([operator_tr_id, operator_name, operator_rfc_safe])
                 const new_operator = {
-                    operator_id:        op_id,
-                    operator_name:      operator_name,
-                    operator_rfc:       operator_rfc_safe,
-                    operator_available: operator_avail,
+                    operator_id:           operator_curp,
+                    operator_name:         operator_name,
+                    operator_curp:         operator_curp,
+                    operator_rfc:          operator_rfc_safe,
+                    operator_nss:          operator_nss_safe,
+                    operator_license:      operator_license_safe,
+                    operator_address:      operator_address_safe,
+                    operator_available:    operator_avail,
+                    operator_registration: auxFuncModule.timeSnapshot(),
                 }
 
                 const createResult = await transporterModelItem.findOneAndUpdate(
@@ -341,9 +367,18 @@ var controller = {
 
             // [ UPDATE with diff ] — compare only whitelisted fields
             const diff = {}
-            if (operator_name      !== found_operator.operator_name)      diff.operator_name      = operator_name
-            if (operator_rfc_safe  !== found_operator.operator_rfc)       diff.operator_rfc       = operator_rfc_safe
-            if (operator_avail     !== found_operator.operator_available)  diff.operator_available = operator_avail
+            if (operator_name          !== found_operator.operator_name)      diff.operator_name      = operator_name
+            if (operator_curp          !== found_operator.operator_curp)
+            {
+                // CURP changed → identity changes with it.
+                diff.operator_curp = operator_curp
+                diff.operator_id   = operator_curp
+            }
+            if (operator_rfc_safe      !== found_operator.operator_rfc)       diff.operator_rfc       = operator_rfc_safe
+            if (operator_nss_safe      !== found_operator.operator_nss)       diff.operator_nss       = operator_nss_safe
+            if (operator_license_safe  !== found_operator.operator_license)   diff.operator_license   = operator_license_safe
+            if (operator_address_safe  !== found_operator.operator_address)   diff.operator_address   = operator_address_safe
+            if (operator_avail         !== found_operator.operator_available) diff.operator_available = operator_avail
 
             if (Object.keys(diff).length === 0)
             {
@@ -394,7 +429,9 @@ var controller = {
         const eco_tr_id  = auxFuncModule.sanitizeString(bodyValues.eco_tr_id)              ?? null
         const eco_name   = auxFuncModule.sanitizeName(bodyValues.eco_name)?.toUpperCase()  ?? null
         const eco_id     = auxFuncModule.sanitizeString(bodyValues.eco_id)                 ?? null
-        const eco_serial = auxFuncModule.sanitizeString(bodyValues.eco_serial_number)?.toUpperCase() ?? null
+        // Plates are now the ECO's identity: normalized (uppercase, no spaces) so the same
+        // physical plate always maps to the same eco_id no matter how it was typed.
+        const eco_plates = auxFuncModule.sanitizeString(bodyValues.eco_plates)?.toUpperCase().replace(/\s+/g, '') ?? null
         const action     = auxFuncModule.sanitizeString(bodyValues.action)?.toLowerCase()  ?? null
 
         auxFuncModule.logger(function_name, 363, 1, 1, "[i] Values received and sanitized...")
@@ -422,6 +459,11 @@ var controller = {
             {
                 auxFuncModule.logger(function_name, 385, 2, 2, "[e] eco_name not valid, rejecting request...")
                 return res.status(400).send({code: '-1', message: 'Entrada de NOMBRE debe contener algún valor válido.'})
+            }
+            if (!auxFuncModule.isValidValue(eco_plates))
+            {
+                auxFuncModule.logger(function_name, 386, 2, 2, "[e] eco_plates not valid, rejecting request...")
+                return res.status(400).send({code: '-1', message: 'Las placas del camión son obligatorias.'})
             }
         }
 
@@ -477,19 +519,42 @@ var controller = {
             }
 
             // [ CREATE or UPDATE ] — explicit field whitelist (no body spreading)
-            const found_eco      = storedEquipment.find(eco => eco.eco_id === eco_id)
-            const eco_serial_safe = auxFuncModule.sanitizeString(bodyValues.eco_serial_number)?.toUpperCase() ?? ''
-            const eco_avail       = bodyValues.eco_available !== false
+            const found_eco              = storedEquipment.find(eco => eco.eco_id === eco_id)
+            const eco_serial_safe        = auxFuncModule.sanitizeString(bodyValues.eco_serial_number)?.toUpperCase()     ?? ''
+            const eco_year_safe          = auxFuncModule.sanitizeString(bodyValues.eco_year)                              ?? ''
+            const eco_color_safe         = auxFuncModule.sanitizeString(bodyValues.eco_color)?.toUpperCase()             ?? ''
+            const eco_engine_serial_safe = auxFuncModule.sanitizeString(bodyValues.eco_engine_serial)?.toUpperCase()     ?? ''
+            const eco_insurance_co_safe  = auxFuncModule.sanitizeString(bodyValues.eco_insurance_company)?.toUpperCase() ?? ''
+            const eco_insurance_pol_safe = auxFuncModule.sanitizeString(bodyValues.eco_insurance_policy)                 ?? ''
+            const eco_avail              = bodyValues.eco_available !== false
+
+            // Plates double as the ID: block duplicates across the whole fleet, but allow
+            // re-submitting the same record unchanged (it already owns this plate).
+            if (!found_eco || found_eco.eco_plates !== eco_plates)
+            {
+                const plateTaken = await transporterModelItem.findOne({'transporter_equipment.eco_id': eco_plates})
+                if (plateTaken)
+                {
+                    auxFuncModule.logger(function_name, 448, 4, 2, "[e] eco_plates already registered, rejecting request...")
+                    return res.status(409).send({code: '-1', message: 'Ya existe un camión registrado con esas placas.'})
+                }
+            }
 
             // [ CREATE ] — eco not found in array
             if (!auxFuncModule.isValidValue(found_eco))
             {
-                const ec_id   = auxFuncModule.createId([eco_tr_id, eco_name, eco_serial_safe])
                 const new_eco = {
-                    eco_id:            ec_id,
-                    eco_name:          eco_name,
-                    eco_serial_number: eco_serial_safe,
-                    eco_available:     eco_avail,
+                    eco_id:                eco_plates,
+                    eco_name:              eco_name,
+                    eco_plates:            eco_plates,
+                    eco_year:              eco_year_safe,
+                    eco_color:             eco_color_safe,
+                    eco_serial_number:     eco_serial_safe,
+                    eco_engine_serial:     eco_engine_serial_safe,
+                    eco_insurance_company: eco_insurance_co_safe,
+                    eco_insurance_policy:  eco_insurance_pol_safe,
+                    eco_available:         eco_avail,
+                    eco_registration:      auxFuncModule.timeSnapshot(),
                 }
 
                 const createResult = await transporterModelItem.findOneAndUpdate(
@@ -512,9 +577,20 @@ var controller = {
 
             // [ UPDATE with diff ] — compare only whitelisted fields
             const diff = {}
-            if (eco_name         !== found_eco.eco_name)          diff.eco_name          = eco_name
-            if (eco_serial_safe  !== found_eco.eco_serial_number) diff.eco_serial_number = eco_serial_safe
-            if (eco_avail        !== found_eco.eco_available)      diff.eco_available     = eco_avail
+            if (eco_name              !== found_eco.eco_name)              diff.eco_name              = eco_name
+            if (eco_plates            !== found_eco.eco_plates)
+            {
+                // Plate changed → identity changes with it.
+                diff.eco_plates = eco_plates
+                diff.eco_id     = eco_plates
+            }
+            if (eco_year_safe          !== found_eco.eco_year)              diff.eco_year              = eco_year_safe
+            if (eco_color_safe         !== found_eco.eco_color)             diff.eco_color             = eco_color_safe
+            if (eco_serial_safe        !== found_eco.eco_serial_number)     diff.eco_serial_number     = eco_serial_safe
+            if (eco_engine_serial_safe !== found_eco.eco_engine_serial)     diff.eco_engine_serial     = eco_engine_serial_safe
+            if (eco_insurance_co_safe  !== found_eco.eco_insurance_company) diff.eco_insurance_company = eco_insurance_co_safe
+            if (eco_insurance_pol_safe !== found_eco.eco_insurance_policy)  diff.eco_insurance_policy  = eco_insurance_pol_safe
+            if (eco_avail              !== found_eco.eco_available)         diff.eco_available         = eco_avail
 
             if (Object.keys(diff).length === 0)
             {

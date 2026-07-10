@@ -1,9 +1,10 @@
 'use strict'
 
 //Import required MODEL SCHEMAS from models MODULE...
-let maneuverModelItem  = require('../MODELS/maneuver.js')
-let routeModelItem     = require('../MODELS/c_routes.js')
-let clientModelItem    = require('../MODELS/client.js')
+let maneuverModelItem     = require('../MODELS/maneuver.js')
+let routeModelItem        = require('../MODELS/c_routes.js')
+let clientModelItem       = require('../MODELS/client.js')
+let transporterModelItem  = require('../MODELS/transporter.js')
 
 // Import auxiliary functions MODULE...
 let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
@@ -119,6 +120,7 @@ var controller =
                     newManeuverObject.man_update_action    = 'CREATED MANEUVER'
                     newManeuverObject.man_update_source    = 'ADMINISTRATOR'
                     newManeuverObject.man_update_date      = auxFuncModule.timeSnapshot()
+                    newManeuverObject.man_reg_date         = auxFuncModule.timeSnapshot()
                     newManeuverObject.man_current_location = man_current_location
                     newManeuverObject.man_current_status   = man_current_status
                     newManeuverObject.man_moni_key         = man_moni_key
@@ -341,21 +343,26 @@ var controller =
             const man_events    = [...existingEvents, timestamp, man_current_location, man_current_status, man_progress]
 
             /* - Step [7]
-            *  - Persist the new location, status, progress and event history...
+            *  - Persist the new location, status, progress and event history. Reaching
+            *    100% here means the route is fully complete, so man_finish_date is
+            *    stamped in this same update — not on every write, only when progress
+            *    hits 100%, so it is never overwritten by a later, unrelated update...
             */
+            const updateFields = {
+                man_current_location: man_current_location,
+                man_current_status:   man_current_status,
+                man_progress:         man_progress,
+                man_events:           man_events,
+                man_update_action:    'UPDATED LOCATION',
+                man_update_source:    'ADMINISTRATOR',
+                man_update_date:      timestamp
+            }
+
+            if (progressPercent === 100) updateFields.man_finish_date = timestamp
+
             const updatedManeuver = await maneuverModelItem.findOneAndUpdate(
                 { man_id: man_id },
-                {
-                    $set: {
-                        man_current_location: man_current_location,
-                        man_current_status:   man_current_status,
-                        man_progress:         man_progress,
-                        man_events:           man_events,
-                        man_update_action:    'UPDATED LOCATION',
-                        man_update_source:    'ADMINISTRATOR',
-                        man_update_date:      timestamp
-                    }
-                },
+                { $set: updateFields },
                 { new: false }
             )
 
@@ -525,6 +532,46 @@ var controller =
             if (maneuversFound.length === 0)
             {
                 return res.status(200).send({ code: '0', message: 'Llave sin maniobras activas o inválida.', maneuvers_data: [] })
+            }
+
+            /* - Step [4]
+            *  - man_moni_key mirrors the assigned client's client_id (see
+            *    handle_maneuver), so cleanKey doubles as the client lookup key.
+            *    man_client is stored as that same client_id — swap it here for
+            *    the human-readable client_name so the read-only portal never
+            *    shows the raw id. Falls back to the stored value if the client
+            *    record is missing so the response never breaks...
+            */
+            const clientFound = await clientModelItem.findOne({ client_id: cleanKey }, { client_name: 1 }).lean()
+
+            if (clientFound?.client_name)
+            {
+                for (const maneuver of maneuversFound) maneuver.man_client = clientFound.client_name
+            }
+
+            /* - Step [5]
+            *  - man_transporter is stored as the assigned transporter's
+            *    transporter_id, same pattern as man_client above. Each maniobra
+            *    can have a different transporter, so resolve every distinct id
+            *    found in this batch in a single query instead of the raw id
+            *    ever reaching the read-only portal...
+            */
+            const transporterIds = [...new Set(maneuversFound.map((m) => m.man_transporter).filter(Boolean))]
+
+            if (transporterIds.length > 0)
+            {
+                const transportersFound = await transporterModelItem.find(
+                    { transporter_id: { $in: transporterIds } },
+                    { transporter_id: 1, transporter_name: 1 }
+                ).lean()
+
+                const transporterNameById = new Map(transportersFound.map((t) => [t.transporter_id, t.transporter_name]))
+
+                for (const maneuver of maneuversFound)
+                {
+                    const resolvedName = transporterNameById.get(maneuver.man_transporter)
+                    if (resolvedName) maneuver.man_transporter = resolvedName
+                }
             }
 
             return res.status(200).send({ code: '1', maneuvers_data: maneuversFound })

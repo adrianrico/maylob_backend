@@ -4,6 +4,7 @@ var express     = require('express')
 var bodyParser  = require('body-parser')
 var cors        = require('cors')
 var rateLimit   = require('express-rate-limit')
+var ipKeyGenerator = rateLimit.ipKeyGenerator
 
 var app = express()
 
@@ -18,14 +19,23 @@ app.use(bodyParser.urlencoded({extended:false}))
 app.use(bodyParser.json())
 app.use(cors()) //CORS added to enable external client and server integration...!
 
-//⚑ Rate limit for the public, unauthenticated MONI KEY lookup (TIL TRACKER),
-//  to slow down brute-force enumeration of man_moni_key values...
+//⚑ Rate limit for the public, unauthenticated MONI KEY lookup (TIL TRACKER).
+//  The client is expected to poll this endpoint once every 10 seconds, so
+//  only one request per key per 10s window is allowed - anything faster is
+//  throttled. Keyed by the moni key itself (not just IP) so legitimate
+//  clients sharing a NAT/proxy don't share one quota, and so unauthenticated
+//  requests without a usable key still fall back to a safe per-IP key...
 var monitorRateLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    limit: 30,
+    windowMs: 10 * 1000,
+    limit: 1,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { code: '-1', message: 'Demasiadas solicitudes, intenta de nuevo en un momento.' }
+    keyGenerator: function(req, res)
+    {
+        var key = req.query.key
+        return (typeof key === 'string' && key.length > 0) ? key : ipKeyGenerator(req.ip)
+    },
+    message: { code: '-1', message: 'Demasiadas solicitudes, intenta de nuevo en 10 segundos.' }
 })
 app.use('/maneuvers/monitor/', monitorRateLimiter)
 

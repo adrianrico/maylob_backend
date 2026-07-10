@@ -30,6 +30,7 @@ var maneuverSchema= schema({
     man_update_action:String,
     man_update_source:String,
     man_update_date:String,
+    man_reg_date:String,
     man_modality:String,
     man_current_location:String,
     man_current_status:String,
