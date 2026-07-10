@@ -16,6 +16,15 @@ if (!mongoUri) {
     process.exit(1)
 }
 
+// Trim accidental whitespace/newlines and comillas envolventes que a veces quedan
+// al pegar la URI en el panel de variables de entorno del proveedor...
+mongoUri = mongoUri.trim().replace(/^['"]|['"]$/g, '')
+
+if (!/^mongodb(\+srv)?:\/\//.test(mongoUri)) {
+    console.error(`[⚑][SERVER] - MONGO_URI_${isLocal ? 'LOCAL' : 'PRODUCTION'} no tiene un formato válido (debe iniciar con "mongodb://" o "mongodb+srv://"). Revisa que no sea el placeholder de .env.example ni tenga comillas/espacios extra.`)
+    process.exit(1)
+}
+
 // [1] DATABASE CONNECTION PROMISE ONLY...
 mongoose.Promise= global.Promise
 
