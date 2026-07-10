@@ -1,6 +1,6 @@
 ># MAYLOB [ v1.2 ] - FULL NODE JS BACKEND PROJECT  
 >- [⚑] **LOCAL COPY** is used separately to allow local **NPM INIT** and **INSTALL** in a way that local server is up and running for testing...
->- [⚑] [index.js] - Local file is configured to work offline by using **NPM START** command on the VS terminal...
+>- [⚑] [index.js] - Local file is configured to work offline by using **NPM RUN DEV** command on the VS terminal (nodemon, hot-reload). **NPM START** runs plain `node index.js` and is what production/Render uses...
 
 >## UPDATE FROM LOCAL WORKING COPY TO LOCAL GIT REPO
 >[⚑] When changes are complete make sure to update according to the following files order:
@@ -19,7 +19,11 @@
 >- [⚑] Para alternar de modo solo se cambia una línea en `.env`: `APP_ENV=local` o `APP_ENV=production`.
 >- [⚑] **local** → conecta a MongoDB local (`MONGO_URI_LOCAL`, por defecto `mongodb://127.0.0.1:27017/maylobdb`).
 >- [⚑] **production** → conecta a MongoDB Atlas (`MONGO_URI_PRODUCTION`).
->- [⚑] En el proveedor donde se despliega "en línea" hay que configurar las mismas variables de entorno (`APP_ENV`, `PORT_PRODUCTION`, `MONGO_URI_PRODUCTION`) en su panel, ya que `.env` no viaja con el repo.
+>- [⚑] En el proveedor donde se despliega "en línea" (Render) hay que configurar en su panel (Environment):
+>   - `APP_ENV=production`
+>   - `MONGO_URI_PRODUCTION` (connection string de Atlas)
+>   - `PORT_PRODUCTION` es opcional: Render inyecta su propio `PORT` en runtime y `index.js` lo usa primero (`process.env.PORT || PORT_PRODUCTION`).
+>   - `.env` no viaja con el repo (está en `.gitignore`), así que estas variables **deben** cargarse manualmente en el dashboard de Render.
 
 >## TO DO
 >- Clean obsolete controllers from each file...
