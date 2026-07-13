@@ -14,7 +14,8 @@ var clientSchema = schema({
     client_phone:String,
     client_email:String,
     client_last_update:String,
-    client_status:String
+    client_status:String,
+    client_man_key:String
 })
 
 module.exports = mongoose.model('client',clientSchema)
