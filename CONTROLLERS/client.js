@@ -93,10 +93,11 @@ var controller = {
                 newClientObject.client_email       = client_email
                 newClientObject.client_status      = 'ACTIVO'
                 newClientObject.client_last_update = auxFuncModule.timeSnapshot()
-                // client_man_key auto-fills with the new client_id on creation, not client input.
-                newClientObject.client_man_key     = new_client_id
+                // client_man_key uses the client-provided value when sent; otherwise it
+                // auto-fills with the new client_id.
+                newClientObject.client_man_key     = client_man_key ?? new_client_id
 
-                auxFuncModule.logger(function_name, 99, 4, 1, "[i] New client prepared with status: ACTIVO, client_man_key: " + new_client_id + "...")
+                auxFuncModule.logger(function_name, 99, 4, 1, "[i] New client prepared with status: ACTIVO, client_man_key: " + newClientObject.client_man_key + "...")
 
                 await newClientObject.save()
 
