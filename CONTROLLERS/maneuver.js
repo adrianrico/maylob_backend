@@ -96,11 +96,12 @@ var controller =
             auxFuncModule.logger(function_name, 84, 3, 1, "[i] Route resolved via: " + (man_route_id ? "custom route lookup" : (man_route ? "client-provided object" : "none")))
 
             /* - Step [3.1]
-            *  - man_moni_key mirrors the assigned client's client_id, so every maniobra
-            *    assigned to the same client shares the same MONI key...
+            *  - man_moni_key mirrors the assigned client's client_man_key (editable
+            *    independently of client_id), so every maniobra assigned to the same
+            *    client shares the same MONI key...
             */
             const clientFound = await clientModelItem.findOne({ client_id: man_client })
-            const man_moni_key = clientFound?.client_id ?? 'NO KEY'
+            const man_moni_key = clientFound?.client_man_key ?? 'NO KEY'
 
             auxFuncModule.logger(function_name, 84, 3, 1, "[i] man_moni_key resolved: " + man_moni_key)
 
@@ -535,14 +536,14 @@ var controller =
             }
 
             /* - Step [4]
-            *  - man_moni_key mirrors the assigned client's client_id (see
+            *  - man_moni_key mirrors the assigned client's client_man_key (see
             *    handle_maneuver), so cleanKey doubles as the client lookup key.
-            *    man_client is stored as that same client_id — swap it here for
-            *    the human-readable client_name so the read-only portal never
-            *    shows the raw id. Falls back to the stored value if the client
+            *    man_client is stored as the client_id — swap it here for the
+            *    human-readable client_name so the read-only portal never shows
+            *    the raw id. Falls back to the stored value if the client
             *    record is missing so the response never breaks...
             */
-            const clientFound = await clientModelItem.findOne({ client_id: cleanKey }, { client_name: 1 }).lean()
+            const clientFound = await clientModelItem.findOne({ client_man_key: cleanKey }, { client_name: 1 }).lean()
 
             if (clientFound?.client_name)
             {
