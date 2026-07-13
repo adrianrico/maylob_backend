@@ -39,6 +39,11 @@ var monitorRateLimiter = rateLimit({
 })
 app.use('/maneuvers/monitor/', monitorRateLimiter)
 
+//⚑ Health check for Render (uptime/liveness probe)...
+app.get('/health',function(req, res){
+    res.status(200).json({ status: 'ok' })
+})
+
 //⚑ Routes to be called from clients requests...
 app.use('/clients/',client_routes)
 app.use('/transporters/',transporter_routes)

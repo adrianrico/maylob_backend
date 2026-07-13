@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: maylob-backend
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: MONGO_URI_PRODUCTION
+        sync: false
+      - key: PORT_PRODUCTION
+        value: 8080

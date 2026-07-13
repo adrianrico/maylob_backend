@@ -24,6 +24,7 @@
 >   - `MONGO_URI_PRODUCTION` (connection string de Atlas)
 >   - `PORT_PRODUCTION` es opcional: Render inyecta su propio `PORT` en runtime y `index.js` lo usa primero (`process.env.PORT || PORT_PRODUCTION`).
 >   - `.env` no viaja con el repo (está en `.gitignore`), así que estas variables **deben** cargarse manualmente en el dashboard de Render.
+>- [⚑] `render.yaml` en la raíz define el Blueprint del servicio (build/start command, health check en `/health`). Al conectar el repo en Render vía Blueprint, solo falta rellenar `MONGO_URI_PRODUCTION` (marcada `sync: false`) en el dashboard.
 
 >## TO DO
 >- Clean obsolete controllers from each file...
