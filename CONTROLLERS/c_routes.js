@@ -38,21 +38,23 @@ var controller = {
                 // Dynamic ID building...
                 let route_id = auxFuncModule.createId([
                         route_name,
-                        body.route_origin,
-                        body.route_destination
+                        body.route_origin?.location_name,
+                        body.route_destination?.location_name
                     ])
+
+                const intermediatePoints = Array.isArray(body.route_intermediate_points)
+                    ? body.route_intermediate_points.map((point, index) => auxFuncModule.sanitizeLocationPoint(point, index + 2, 'NO INTERMEDIATE SET'))
+                    : []
+
+                const destinationStep = intermediatePoints.length + 2
 
                 const newRoute = new objectModelItem({
                     route_id: route_id,
                     route_name:                  auxFuncModule.sanitizeString(body.route_name)        || 'NO NAME SET',
                     route_category:              auxFuncModule.sanitizeString(body.route_category)    || 'NO CATEGORY SET',
-                    route_origin:                auxFuncModule.sanitizeString(body.route_origin)      || 'NO ORIGIN SET',
-                    route_origin_events:         auxFuncModule.sanitizeEvents(body.route_origin_events),
-                    route_destination:           auxFuncModule.sanitizeString(body.route_destination) || 'NO DESTINATION SET',
-                    route_destination_events:    auxFuncModule.sanitizeEvents(body.route_destination_events),
-                    route_intermediate_points:   auxFuncModule.sanitizeString(body.route_intermediate_points) || '',
-                    route_intermediate_events:   auxFuncModule.sanitizeEvents(body.route_intermediate_events),
-                    route_intermediate_stops:    auxFuncModule.sanitizeStops(body.route_intermediate_stops),
+                    route_origin:                auxFuncModule.sanitizeLocationPoint(body.route_origin, 1, 'NO ORIGIN SET'),
+                    route_intermediate_points:   intermediatePoints,
+                    route_destination:           auxFuncModule.sanitizeLocationPoint(body.route_destination, destinationStep, 'NO DESTINATION SET'),
                 })
 
                 await newRoute.save()
@@ -67,8 +69,6 @@ var controller = {
 
             const sanitizedName        = auxFuncModule.sanitizeString(body.route_name)
             const sanitizedCategory    = auxFuncModule.sanitizeString(body.route_category)
-            const sanitizedOrigin      = auxFuncModule.sanitizeString(body.route_origin)
-            const sanitizedDestination = auxFuncModule.sanitizeString(body.route_destination)
 
             //ROUTE NAME...
             if (sanitizedName !== null && sanitizedName !== existingRoute.route_name)
@@ -82,51 +82,34 @@ var controller = {
                 updateFields.route_category = sanitizedCategory
             }
 
-            // ROUTE ORIGIN...
-            if (sanitizedOrigin !== null && sanitizedOrigin !== existingRoute.route_origin)
+            // ROUTE ORIGIN (full replace, step_number siempre 1)...
+            if (typeof body.route_origin === 'object' && body.route_origin !== null && !Array.isArray(body.route_origin))
             {
-                updateFields.route_origin = sanitizedOrigin
+                updateFields.route_origin = auxFuncModule.sanitizeLocationPoint(body.route_origin, 1, existingRoute.route_origin?.location_name || 'NO ORIGIN SET')
+                auxFuncModule.logger(function_name,127,3,1,"[i] ORIGIN replaced...")
             }
 
-            // ROUTE DESTINATION...
-            if (sanitizedDestination !== null && sanitizedDestination !== existingRoute.route_destination)
+            // ROUTE INTERMEDIATE POINTS (full replace, step_number recalculado)...
+            let intermediateCount = existingRoute.route_intermediate_points?.length || 0
+            if (Array.isArray(body.route_intermediate_points))
             {
-                updateFields.route_destination = sanitizedDestination
+                const rebuiltIntermediatePoints = body.route_intermediate_points.map((point, index) => auxFuncModule.sanitizeLocationPoint(point, index + 2, 'NO INTERMEDIATE SET'))
+                updateFields.route_intermediate_points = rebuiltIntermediatePoints
+                intermediateCount = rebuiltIntermediatePoints.length
+                auxFuncModule.logger(function_name,175,3,1,"[i] INTERMEDIATE POINTS replaced...")
             }
 
-            // ROUTE INTERMEDIATE POINTS...
-            const sanitizedIntermediate = auxFuncModule.sanitizeString(body.route_intermediate_points)
-            if (sanitizedIntermediate !== null && sanitizedIntermediate !== existingRoute.route_intermediate_points)
+            // ROUTE DESTINATION (step_number continúa la secuencia desde ORIGIN(1) -> INTERMEDIATES(2..n+1) -> DESTINATION)...
+            const destinationStep = intermediateCount + 2
+            if (typeof body.route_destination === 'object' && body.route_destination !== null && !Array.isArray(body.route_destination))
             {
-                updateFields.route_intermediate_points = sanitizedIntermediate
+                updateFields.route_destination = auxFuncModule.sanitizeLocationPoint(body.route_destination, destinationStep, existingRoute.route_destination?.location_name || 'NO DESTINATION SET')
+                auxFuncModule.logger(function_name,167,3,1,"[i] DESTINATION replaced...")
             }
-
-            // [3][B] REPLACE ORIGIN EVENTS (array entrante reemplaza al almacenado)...
-            if (Array.isArray(body.route_origin_events))
+            else if (existingRoute.route_destination && existingRoute.route_destination.step_number !== destinationStep)
             {
-                updateFields.route_origin_events = auxFuncModule.sanitizeEvents(body.route_origin_events)
-                auxFuncModule.logger(function_name,127,3,1,"[i] ORIGIN EVENTS replaced...")
-            }
-
-            // [4][B] REPLACE DESTINATION EVENTS...
-            if (Array.isArray(body.route_destination_events))
-            {
-                updateFields.route_destination_events = auxFuncModule.sanitizeEvents(body.route_destination_events)
-                auxFuncModule.logger(function_name,167,3,1,"[i] DESTINATION EVENTS replaced...")
-            }
-
-            // [5][B] REPLACE INTERMEDIATE EVENTS...
-            if (Array.isArray(body.route_intermediate_events))
-            {
-                updateFields.route_intermediate_events = auxFuncModule.sanitizeEvents(body.route_intermediate_events)
-                auxFuncModule.logger(function_name,175,3,1,"[i] INTERMEDIATE EVENTS replaced...")
-            }
-
-            // [5][C] REPLACE INTERMEDIATE STOPS (new multi-stop format)...
-            if (Array.isArray(body.route_intermediate_stops))
-            {
-                updateFields.route_intermediate_stops = auxFuncModule.sanitizeStops(body.route_intermediate_stops)
-                auxFuncModule.logger(function_name,176,3,1,"[i] INTERMEDIATE STOPS replaced...")
+                updateFields.route_destination = { ...existingRoute.route_destination, step_number: destinationStep }
+                auxFuncModule.logger(function_name,167,3,1,"[i] DESTINATION step_number resynced...")
             }
 
             // [6] Update only if there was change...

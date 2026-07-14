@@ -171,6 +171,40 @@ function sanitizeStops(arr, maxItems = 20)
     }).filter(Boolean)
 }
 
+// Deep-sanitizes a route location's events[] and enforces the fixed, unremovable "cancelado" checkpoint.
+// Client-supplied sub_step_number is ignored - the server always renumbers sequentially (1..n),
+// and any client-sent "cancelado" entry is dropped since it's always regenerated fresh.
+function sanitizeLocationEvents(arr, maxItems = 30)
+{
+    const cleanedEvents = (Array.isArray(arr) ? arr : [])
+        .slice(0, maxItems)
+        .map(ev =>
+        {
+            if (typeof ev !== 'object' || ev === null || Array.isArray(ev)) return null
+            const event_name = sanitizeString(String(ev.event_name ?? ''), 100) ?? ''
+            if (event_name === '' || event_name.toLowerCase() === 'cancelado') return null
+            return {
+                event_name,
+                sub_events: sanitizeString(String(ev.sub_events ?? ''), 300) ?? '',
+            }
+        })
+        .filter(Boolean)
+        .map((ev, index) => ({ event_name: ev.event_name, sub_step_number: index + 1, sub_events: ev.sub_events }))
+
+    return [{ event_name: 'cancelado', sub_step_number: 0, sub_events: '' }, ...cleanedEvents]
+}
+
+// Builds a route location point {location_name, step_number, events[]} from client input.
+function sanitizeLocationPoint(raw, stepNumber, defaultName)
+{
+    const source = (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) ? raw : {}
+    return {
+        location_name: sanitizeString(source.location_name) || defaultName,
+        step_number: stepNumber,
+        events: sanitizeLocationEvents(source.events),
+    }
+}
+
 // Deep-sanitizes an array of container objects
 function sanitizeContainers(arr, maxItems = 4)
 {
@@ -257,6 +291,8 @@ module.exports = {
     sanitizeUrl,
     sanitizeEvents,
     sanitizeStops,
+    sanitizeLocationEvents,
+    sanitizeLocationPoint,
     sanitizeContainers,
     sanitizeObject,
 }
