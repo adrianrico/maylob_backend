@@ -285,6 +285,72 @@ function sanitizeObject(value, maxDepth = 5)
 
 //#endregion [⚑] SANITIZATION FUNCTIONS...
 
+//#region [⚑] ROUTE SEQUENCE FUNCTIONS...
+
+// Flattens a route's origin/intermediate points/destination into the ordered
+// (step_number, sub_step_number) sequence man_events is validated/backfilled against.
+// sub_step_number 0 ("cancelado") is excluded - it's a fixed override checkpoint on
+// each point, not part of the forward flow.
+//
+// Progress is weighted, not one-unit-per-event: totalUnits = every point (origin +
+// intermediate points + destination) + every one of its events (cancelado excluded)
+// + every sub_event of those events. The endpoint can only ever target a whole event
+// (step_number + sub_step_number) - sub_events have no identifier of their own - so
+// reaching an event credits that event's own unit plus all of its sub_events' units,
+// and a point's unit is credited alongside the first event of that point that gets
+// reached (a point with no events of its own is simply carried into the next point's
+// first event, same as it can't be targeted independently anyway). Each milestone's
+// cumulativeUnits is the running total once that milestone is reached, so progress
+// is just cumulativeUnits / totalUnits.
+function buildRouteMilestones(route)
+{
+    if (!route) return { milestones: [], totalUnits: 0 }
+
+    const points = [route.route_origin, ...(Array.isArray(route.route_intermediate_points) ? route.route_intermediate_points : []), route.route_destination]
+        .filter(point => point && typeof point === 'object')
+        .sort((a, b) => (a.step_number ?? 0) - (b.step_number ?? 0))
+
+    const milestones = []
+    let cumulativeUnits = 0
+
+    for (const point of points)
+    {
+        const events = Array.isArray(point.events) ? point.events : []
+        const sortedEvents = events
+            .filter(event => event && event.sub_step_number !== 0)
+            .sort((a, b) => (a.sub_step_number ?? 0) - (b.sub_step_number ?? 0))
+
+        cumulativeUnits += 1 // the point itself
+
+        for (const event of sortedEvents)
+        {
+            const subEventsCount = Array.isArray(event.sub_events) ? event.sub_events.length : 0
+            cumulativeUnits += 1 + subEventsCount // the event + all of its sub_events
+
+            milestones.push({
+                step_number: point.step_number,
+                sub_step_number: event.sub_step_number,
+                location_name: point.location_name,
+                event_name: event.event_name,
+                cumulativeUnits,
+            })
+        }
+    }
+
+    return { milestones, totalUnits: cumulativeUnits }
+}
+
+// Finds a route's origin/intermediate/destination point matching a location_name,
+// regardless of whether that point has any real (non-cancelado) events...
+function findRoutePoint(route, location_name)
+{
+    if (!route) return null
+    const points = [route.route_origin, ...(Array.isArray(route.route_intermediate_points) ? route.route_intermediate_points : []), route.route_destination]
+    return points.find(point => point && typeof point === 'object' && point.location_name === location_name) ?? null
+}
+
+//#endregion [⚑] ROUTE SEQUENCE FUNCTIONS...
+
 module.exports = {
     isValidValue,
     logger,
@@ -302,4 +368,6 @@ module.exports = {
     sanitizeLocationPoint,
     sanitizeContainers,
     sanitizeObject,
+    buildRouteMilestones,
+    findRoutePoint,
 }

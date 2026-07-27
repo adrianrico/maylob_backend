@@ -39,7 +39,7 @@ var maneuverSchema= schema({
         default: '0%'
     },
     man_events:{
-        type:[String],
+        type:[Object],
         default:[]
     },
     man_containers:{

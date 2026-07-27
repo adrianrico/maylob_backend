@@ -126,7 +126,10 @@ var controller =
                     newManeuverObject.man_current_status   = man_current_status
                     newManeuverObject.man_moni_key         = man_moni_key
                     newManeuverObject.man_progress         = '0%'
-                    newManeuverObject.man_events           = [auxFuncModule.timeSnapshot(), man_current_location, man_current_status, newManeuverObject.man_progress]
+                    // man_events starts empty - the creation-time location/status (usually
+                    // "SIN INICIAR") isn't a real route milestone, so it isn't logged as one.
+                    // The first genuine entry is written by update_location...
+                    newManeuverObject.man_events           = []
 
                     await newManeuverObject.save()
 
@@ -271,77 +274,119 @@ var controller =
                 })
             }
 
-            const routeStops = route?.route_intermediate_stops
-            const stops       = Array.isArray(routeStops) && routeStops.length > 0
-                ? routeStops
-                : (maneuverFound.man_intermediate_stops ?? [])
-
-            const addPointMilestones = (validMilestones, pointName, events) => {
-                for (const e of events ?? [])
-                {
-                    const eventName = e?.event_name ?? ''
-                    if (eventName && eventName.toUpperCase() !== 'CANCELADO') validMilestones.add(pointName + '|' + eventName)
-                }
-            }
-
             /* - Step [5]
-            *  - Build the set of every REAL (point + event) milestone defined by the route,
-            *    split by origin/intermediates vs destination, excluding CANCELADO. The full
-            *    union is both the denominator (its size) and the whitelist used to validate
-            *    history — only genuine route events count towards progress, so a bogus/legacy
-            *    entry like the creation snapshot ("SIN INICIAR") can never inflate it...
+            *  - Flatten the route's origin/intermediate points/destination into their
+            *    ordered (step_number, sub_step_number) sequence — the fixed order every
+            *    man_events entry is validated/backfilled against. "cancelado" (sub_step_number
+            *    0) is excluded, it's an override checkpoint on each point, not part of the
+            *    forward flow. totalUnits (points + events + sub_events, weighted) is the
+            *    progress denominator; milestones is also the whitelist used to resolve the
+            *    incoming update to a (step, sub_step) position...
             */
-            const priorMilestones = new Set() // origin + every intermediate stop...
-            addPointMilestones(priorMilestones, route?.route_origin, route?.route_origin_events)
-            for (const stop of stops) addPointMilestones(priorMilestones, stop.stop_name, stop.stop_events)
+            const { milestones, totalUnits } = auxFuncModule.buildRouteMilestones(route)
+            const totalMilestones = milestones.length
 
-            const destinationMilestones = new Set()
-            addPointMilestones(destinationMilestones, route?.route_destination, route?.route_destination_events)
+            const existingEvents = Array.isArray(maneuverFound.man_events) ? maneuverFound.man_events : []
+            const timestamp      = auxFuncModule.timeSnapshot()
+            const newIsCancelled = man_current_status.toUpperCase().includes('CANCEL')
 
-            const validMilestones  = new Set([...priorMilestones, ...destinationMilestones])
-            const totalRealEvents  = validMilestones.size
-            const perEventValue    = totalRealEvents > 0 ? 100 / totalRealEvents : 0
+            let man_events, progressPercent
 
-            /* - Step [6]
-            *  - This update's event overrides everything: selecting CANCELADO always yields
-            *    0% for THIS update (does not permanently block future recalculations).
-            *    Otherwise, the progress is the per-event value times the count of DISTINCT
-            *    real route milestones reached so far (including this one) — re-saving the same
-            *    point/event again, or a non-route event, must not inflate progress. If the
-            *    location being updated IS the destination, origin + every intermediate point
-            *    are treated as already completed (reaching the destination implies everything
-            *    before it happened), so only the destination's own progress still depends on
-            *    which of its events have actually been logged...
-            */
-            const newIsCancelled  = man_current_status.toUpperCase().includes('CANCEL')
-            const existingEvents  = maneuverFound.man_events ?? []
-            const destinationName = route?.route_destination || maneuverFound.man_unload_location
-            const isDestinationUpdate = !!destinationName && man_current_location === destinationName
-
-            let progressPercent = 0
-            if (!newIsCancelled && totalRealEvents > 0)
+            if (newIsCancelled)
             {
-                const reachedMilestones = new Set()
+                /* - Step [6a]
+                *  - CANCELADO is a fixed override checkpoint on whichever point matches the
+                *    current location: it always reports 0% for THIS update and never touches
+                *    the recorded sequence (no backfill, no rollback pruning)...
+                */
+                const point = auxFuncModule.findRoutePoint(route, man_current_location)
+                man_events = [...existingEvents, {
+                    step_number: point?.step_number ?? null,
+                    sub_step_number: 0,
+                    location_name: man_current_location,
+                    event_name: 'CANCELADO',
+                    timestamp,
+                    progress: '0%'
+                }]
+                progressPercent = 0
+            }
+            else
+            {
+                const targetIndex = milestones.findIndex(m => m.location_name === man_current_location && m.event_name === man_current_status)
 
-                if (isDestinationUpdate)
+                if (targetIndex === -1)
                 {
-                    for (const milestone of priorMilestones) reachedMilestones.add(milestone)
+                    /* - Step [6b]
+                    *  - This (location, status) pair isn't part of the linked route's flow
+                    *    (no route linked, or a legacy/free-text status) — append as history
+                    *    without touching the sequence watermark or recomputing progress...
+                    */
+                    const lastSequenced = [...existingEvents].reverse().find(e => e?.step_number != null && e?.sub_step_number != null)
+                    progressPercent = lastSequenced ? (parseInt(lastSequenced.progress, 10) || 0) : 0
+                    man_events = [...existingEvents, {
+                        step_number: null,
+                        sub_step_number: null,
+                        location_name: man_current_location,
+                        event_name: man_current_status,
+                        timestamp,
+                        progress: progressPercent + '%'
+                    }]
                 }
-
-                for (let i = 0; i + 3 < existingEvents.length; i += 4)
+                else
                 {
-                    const pastKey = (existingEvents[i + 1] ?? '') + '|' + (existingEvents[i + 2] ?? '')
-                    if (validMilestones.has(pastKey)) reachedMilestones.add(pastKey)
-                }
-                const newKey = man_current_location + '|' + man_current_status
-                if (validMilestones.has(newKey)) reachedMilestones.add(newKey)
+                    /* - Step [6c]
+                    *  - Sequence-validated update. currentIndex is the watermark: one past the
+                    *    highest milestone index already reached (0 if none yet). targetIndex is
+                    *    where this update lands in the flattened (step, sub_step) order:
+                    *      - targetIndex >= currentIndex -> consecutive advance or forward jump.
+                    *        Any skipped points/sub-steps in between are backfilled (same
+                    *        timestamp) so the sequence never has gaps — sub_events are never
+                    *        backfilled, they're free-text notes, not part of the sequence.
+                    *      - targetIndex <  currentIndex -> rollback. Drop this and every later
+                    *        recorded milestone, then re-register the target fresh...
+                    */
+                    let currentIndex = 0
+                    for (const e of existingEvents)
+                    {
+                        if (e?.step_number == null || e?.sub_step_number == null) continue
+                        const idx = milestones.findIndex(m => m.step_number === e.step_number && m.sub_step_number === e.sub_step_number)
+                        if (idx !== -1) currentIndex = Math.max(currentIndex, idx + 1)
+                    }
 
-                progressPercent = Math.min(100, Math.round(reachedMilestones.size * perEventValue))
+                    const toEntry = (idx) => {
+                        const m = milestones[idx]
+                        return {
+                            step_number: m.step_number,
+                            sub_step_number: m.sub_step_number,
+                            location_name: m.location_name,
+                            event_name: m.event_name,
+                            timestamp,
+                            progress: (totalUnits > 0 ? Math.round(m.cumulativeUnits / totalUnits * 100) : 0) + '%'
+                        }
+                    }
+
+                    if (targetIndex >= currentIndex)
+                    {
+                        const backfilled = []
+                        for (let i = currentIndex; i < targetIndex; i++) backfilled.push(toEntry(i))
+                        backfilled.push(toEntry(targetIndex))
+                        man_events = [...existingEvents, ...backfilled]
+                    }
+                    else
+                    {
+                        const kept = existingEvents.filter(e => {
+                            if (e?.step_number == null || e?.sub_step_number == null) return true
+                            const idx = milestones.findIndex(m => m.step_number === e.step_number && m.sub_step_number === e.sub_step_number)
+                            return idx !== -1 && idx < targetIndex
+                        })
+                        man_events = [...kept, toEntry(targetIndex)]
+                    }
+
+                    progressPercent = totalUnits > 0 ? Math.round(milestones[targetIndex].cumulativeUnits / totalUnits * 100) : 0
+                }
             }
 
             const man_progress = progressPercent + '%'
-            const timestamp     = auxFuncModule.timeSnapshot()
-            const man_events    = [...existingEvents, timestamp, man_current_location, man_current_status, man_progress]
 
             /* - Step [7]
             *  - Persist the new location, status, progress and event history. Reaching

@@ -1,7 +1,8 @@
 'use strict'
 
 // Import required MODEL SCHEMAS from models MODULE...
-var clientModelItem = require('../MODELS/client.js')
+var clientModelItem   = require('../MODELS/client.js')
+var maneuverModelItem = require('../MODELS/maneuver.js')
 
 // Import auxiliary functions MODULE...
 let auxFuncModule = require('../CONTROLLERS/auxiliary_functions.js')
@@ -157,6 +158,23 @@ var controller = {
                 if (updateResult)
                 {
                     auxFuncModule.logger(function_name, 145, 4, 1, "[i] Client UPDATED successfully...")
+
+                    /* - Step [6]
+                    *  - man_moni_key mirrors the client's client_man_key (see
+                    *  - handle_maneuver in CONTROLLERS/maneuver.js). When client_man_key
+                    *  - changes here, every maniobra already assigned to this client must
+                    *  - be updated too, or their monitoring key (and the public tracking
+                    *  - link built from it) goes stale...
+                    */
+                    if (diff.client_man_key !== undefined)
+                    {
+                        const maneuversUpdateResult = await maneuverModelItem.updateMany(
+                            {man_client: search_client_id},
+                            {$set: {man_moni_key: diff.client_man_key}}
+                        )
+                        auxFuncModule.logger(function_name, 146, 4, 1, "[i] man_moni_key cascaded to maniobras, matched: " + maneuversUpdateResult.matchedCount + ", modified: " + maneuversUpdateResult.modifiedCount)
+                    }
+
                     return res.status(200).send({code:'1', message:'Cliente actualizado correctamente.'})
                 }
                 else
