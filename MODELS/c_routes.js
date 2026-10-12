@@ -24,6 +24,12 @@ var objectSchema= schema({
         type: Object,
         default: null
     },
+    // Legacy (pre-stepper) fields, still present on older stored routes. Kept in the
+    // schema so find() returns them and normalizeLegacyRoute can rebuild the stepper shape...
+    route_origin_events:       { type: [Object], default: undefined },
+    route_destination_events:  { type: [Object], default: undefined },
+    route_intermediate_events: { type: [Object], default: undefined },
+    route_intermediate_stops:  { type: [Object], default: undefined },
 
 })
 

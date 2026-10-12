@@ -302,8 +302,41 @@ function sanitizeObject(value, maxDepth = 5)
 // first event, same as it can't be targeted independently anyway). Each milestone's
 // cumulativeUnits is the running total once that milestone is reached, so progress
 // is just cumulativeUnits / totalUnits.
+// Routes stored before the stepper restructure keep route_origin / route_destination as plain
+// location names, their events in route_origin_events / route_destination_events and their
+// intermediate points in route_intermediate_stops {stop_name, stop_events[]} (no sub_events,
+// no step numbers). Rebuilds the current {location_name, step_number, events[]} shape from
+// them so legacy routes and the maneuvers that embed them keep working; current routes
+// pass through untouched...
+function normalizeLegacyRoute(route)
+{
+    if (!route) return route
+    const plain = typeof route.toObject === 'function' ? route.toObject() : route
+    if (plain.route_origin && typeof plain.route_origin === 'object') return plain
+    if (typeof plain.route_origin !== 'string') return plain
+
+    const toEvents = (list) => [
+        { event_name: 'cancelado', sub_step_number: 0, sub_events: [] },
+        ...(Array.isArray(list) ? list : [])
+            .map(ev => String(ev?.event_name ?? '').trim())
+            .filter(name => name !== '' && name.toLowerCase() !== 'cancelado')
+            .map((event_name, index) => ({ event_name, sub_step_number: index + 1, sub_events: [] }))
+    ]
+
+    const stops = Array.isArray(plain.route_intermediate_stops) ? plain.route_intermediate_stops : []
+    return {
+        ...plain,
+        route_origin: { location_name: plain.route_origin, step_number: 1, events: toEvents(plain.route_origin_events) },
+        route_intermediate_points: stops
+            .filter(stop => stop && String(stop.stop_name ?? '').trim() !== '')
+            .map((stop, index) => ({ location_name: stop.stop_name, step_number: index + 2, events: toEvents(stop.stop_events) })),
+        route_destination: { location_name: plain.route_destination, step_number: stops.length + 2, events: toEvents(plain.route_destination_events) },
+    }
+}
+
 function buildRouteMilestones(route)
 {
+    route = normalizeLegacyRoute(route)
     if (!route) return { milestones: [], totalUnits: 0 }
 
     const points = [route.route_origin, ...(Array.isArray(route.route_intermediate_points) ? route.route_intermediate_points : []), route.route_destination]
@@ -344,6 +377,7 @@ function buildRouteMilestones(route)
 // regardless of whether that point has any real (non-cancelado) events...
 function findRoutePoint(route, location_name)
 {
+    route = normalizeLegacyRoute(route)
     if (!route) return null
     const points = [route.route_origin, ...(Array.isArray(route.route_intermediate_points) ? route.route_intermediate_points : []), route.route_destination]
     return points.find(point => point && typeof point === 'object' && point.location_name === location_name) ?? null
@@ -368,6 +402,7 @@ module.exports = {
     sanitizeLocationPoint,
     sanitizeContainers,
     sanitizeObject,
+    normalizeLegacyRoute,
     buildRouteMilestones,
     findRoutePoint,
 }
