@@ -13,11 +13,19 @@ var client_routes      = require('./ROUTES/client')
 var transporter_routes = require('./ROUTES/transporter')
 var c_routes_routes    = require('./ROUTES/c_routes')
 var maneuver_routes    = require('./ROUTES/maneuver')
+var operatorAuth_routes = require('./ROUTES/operatorAuth')
+
+//⚑ Middleware modules...
+var resolveOperator = require('./CONTROLLERS/middleware/resolveOperator')
 
 //⚑ MIDDLEWARE...
 app.use(bodyParser.urlencoded({extended:false}))
 app.use(bodyParser.json())
 app.use(cors()) //CORS added to enable external client and server integration...!
+
+//⚑ Identifies the calling operator (TIL OPERATOR portal) from the X-Operator-Curp
+//  header, if present. Never rejects - attaches req.operator (or null)...
+app.use(resolveOperator)
 
 //⚑ Rate limit for the public, unauthenticated MONI KEY lookup (TIL TRACKER).
 //  The client is expected to poll this endpoint once every 10 seconds, so
@@ -49,6 +57,7 @@ app.use('/clients/',client_routes)
 app.use('/transporters/',transporter_routes)
 app.use('/maneuvers/',maneuver_routes)
 app.use('/routes/',c_routes_routes)
+app.use('/auth/',operatorAuth_routes)
 
 // Export module...
 module.exports = app

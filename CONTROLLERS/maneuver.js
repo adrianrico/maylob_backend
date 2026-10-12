@@ -37,6 +37,7 @@ var controller =
         const man_extra_location_link = auxFuncModule.sanitizeUrl(bodyValues.man_extra_location_link)         ?? 'PENDIENTE'
         const man_eco                 = auxFuncModule.sanitizeString(bodyValues.man_eco)                      ?? 'PENDIENTE'
         const man_operator            = auxFuncModule.sanitizeName(bodyValues.man_operator)?.toUpperCase()    ?? 'PENDIENTE'
+        const man_operator_id         = auxFuncModule.sanitizeId(bodyValues.man_operator_id)                  ?? ''
         const man_gps_link            = auxFuncModule.sanitizeUrl(bodyValues.man_gps_link)                    ?? 'PENDIENTE'
         const man_transporter         = auxFuncModule.sanitizeString(bodyValues.man_transporter)              ?? 'PENDIENTE'
         const man_moni_enable         = (bodyValues.man_moni_enable === false || bodyValues.man_moni_enable === 'false') ? 'false' : 'true'
@@ -58,6 +59,7 @@ var controller =
         newManeuverObject.man_extra_location_link = man_extra_location_link
         newManeuverObject.man_eco                 = man_eco
         newManeuverObject.man_operator            = man_operator
+        newManeuverObject.man_operator_id         = man_operator_id
         newManeuverObject.man_gps_link            = man_gps_link
         newManeuverObject.man_transporter         = man_transporter
 
@@ -172,6 +174,7 @@ var controller =
                                 man_extra_location_link: newManeuverObject.man_extra_location_link,
                                 man_eco:                 newManeuverObject.man_eco,
                                 man_operator:            newManeuverObject.man_operator,
+                                man_operator_id:         newManeuverObject.man_operator_id,
                                 man_gps_link:            newManeuverObject.man_gps_link,
                                 man_transporter:         newManeuverObject.man_transporter,
                                 man_moni_enable:         man_moni_enable,
@@ -290,6 +293,14 @@ var controller =
             const timestamp      = auxFuncModule.timeSnapshot()
             const newIsCancelled = man_current_status.toUpperCase().includes('CANCEL')
 
+            /* - Step [5.1]
+            *  - Actor identity for this update: req.operator comes from the resolveOperator
+            *    middleware (X-Operator-Curp header, set by TIL OPERATOR). Requests without it
+            *    (the admin portal, til_forwarder) keep the previous fixed 'ADMINISTRATOR'...
+            */
+            const actorName = req.operator?.name ?? 'ADMINISTRATOR'
+            const actorCurp = req.operator?.curp ?? null
+
             let man_events, progressPercent
 
             if (newIsCancelled)
@@ -306,7 +317,9 @@ var controller =
                     location_name: man_current_location,
                     event_name: 'CANCELADO',
                     timestamp,
-                    progress: '0%'
+                    progress: '0%',
+                    updated_by_name: actorName,
+                    updated_by_curp: actorCurp
                 }]
                 progressPercent = 0
             }
@@ -329,7 +342,9 @@ var controller =
                         location_name: man_current_location,
                         event_name: man_current_status,
                         timestamp,
-                        progress: progressPercent + '%'
+                        progress: progressPercent + '%',
+                        updated_by_name: actorName,
+                        updated_by_curp: actorCurp
                     }]
                 }
                 else
@@ -361,7 +376,9 @@ var controller =
                             location_name: m.location_name,
                             event_name: m.event_name,
                             timestamp,
-                            progress: (totalUnits > 0 ? Math.round(m.cumulativeUnits / totalUnits * 100) : 0) + '%'
+                            progress: (totalUnits > 0 ? Math.round(m.cumulativeUnits / totalUnits * 100) : 0) + '%',
+                            updated_by_name: actorName,
+                            updated_by_curp: actorCurp
                         }
                     }
 
@@ -400,7 +417,8 @@ var controller =
                 man_progress:         man_progress,
                 man_events:           man_events,
                 man_update_action:    'UPDATED LOCATION',
-                man_update_source:    'ADMINISTRATOR',
+                man_update_source:    actorName,
+                man_update_by_curp:   actorCurp,
                 man_update_date:      timestamp
             }
 
@@ -522,6 +540,46 @@ var controller =
         }catch(error)
         {
             auxFuncModule.logger(function_name, 256, 4, 3, "[e] Promise error: " + error.message)
+            return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
+        }
+    },
+
+    // [⚑ v1.0][ GET MANEUVERS ASSIGNED TO THE LOGGED OPERATOR, PENDING ONLY ][ TIL OPERATOR portal ]
+    get_maneuvers_by_operator: async function(req, res)
+    {
+        let function_name = "get_maneuvers_by_operator"
+        auxFuncModule.logger(function_name, 0, 0)
+
+        /* - Step [1]
+        *  - req.operator comes from the resolveOperator middleware (X-Operator-Curp header).
+        *    No operator resolved -> the caller isn't identified, reject...
+        */
+        if (!req.operator)
+        {
+            auxFuncModule.logger(function_name, 0, 1, 2, "[e] No operator resolved from request, rejecting...")
+            return res.status(401).send({ code: '-1', message: 'Operador no identificado.' })
+        }
+
+        auxFuncModule.logger(function_name, 0, 1, 1, "[i] Operator resolved: " + req.operator.curp)
+
+        try
+        {
+            /* - Step [2]
+            *  - "Por completar" = not at 100% progress and not cancelled...
+            */
+            const maneuversFound = await maneuverModelItem.find({
+                man_operator_id:   req.operator.curp,
+                man_progress:      { $ne: '100%' },
+                man_current_status: { $not: /cancel/i },
+            }).sort({ _id: -1 }).lean()
+
+            auxFuncModule.logger(function_name, 0, 2, 1, "[i] Query executed, matches found: " + maneuversFound.length)
+
+            return res.status(200).send({ code: '1', maneuvers_data: maneuversFound })
+        }
+        catch (error)
+        {
+            auxFuncModule.logger(function_name, 0, 3, 3, "[e] Promise error: " + error.message)
             return res.status(500).send({ code: '-1', message: 'Error al procesar los datos en el servidor.' })
         }
     },

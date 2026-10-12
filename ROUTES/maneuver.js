@@ -14,6 +14,7 @@ router.delete('/maneuver/', maneuverController.delete_maneuver)
 router.patch('/updateLocation/', maneuverController.update_location)
 router.get('/stats/', maneuverController.get_maneuver_stats)
 router.get('/monitor/', maneuverController.get_maneuvers_by_key)
+router.get('/byOperator/', maneuverController.get_maneuvers_by_operator)
 
 //#endregion [ CONTROLLER ROUTES ]
 
