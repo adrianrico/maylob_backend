@@ -272,8 +272,8 @@ var controller =
             if (!route)
             {
                 route = await routeModelItem.findOne({
-                    route_origin:      maneuverFound.man_load_location,
-                    route_destination: maneuverFound.man_unload_location
+                    'route_origin.location_name':      maneuverFound.man_load_location,
+                    'route_destination.location_name': maneuverFound.man_unload_location
                 })
             }
 
@@ -325,7 +325,13 @@ var controller =
             }
             else
             {
-                const targetIndex = milestones.findIndex(m => m.location_name === man_current_location && m.event_name === man_current_status)
+                // man_current_status arrives as "EVENTO" or "EVENTO / SUBEVENTO" (sub_events have no
+                // identifier of their own), so match the milestone by its event_name alone or as the
+                // prefix before " / " - an exact compare never matched once a sub_event was chosen...
+                const targetIndex = milestones.findIndex(m =>
+                    m.location_name === man_current_location &&
+                    (man_current_status === m.event_name || man_current_status.startsWith(m.event_name + ' / '))
+                )
 
                 if (targetIndex === -1)
                 {
