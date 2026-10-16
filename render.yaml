@@ -14,3 +14,12 @@ services:
         sync: false
       - key: PORT_PRODUCTION
         value: 8080
+      # Seguridad: sin estas variables el servidor NO arranca en producción.
+      - key: ADMIN_API_KEY
+        sync: false          # pégala a mano en el dashboard (mínimo 24 caracteres)
+      - key: JWT_SECRET
+        generateValue: true  # Render genera un secreto aleatorio fuerte
+      - key: CORS_ORIGINS
+        sync: false          # ej. https://admin.midominio.com
+      - key: TRUST_PROXY
+        value: 1

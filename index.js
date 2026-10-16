@@ -1,39 +1,8 @@
 'use strict'
 
-require('dotenv').config()
-
-var mongoose    = require('mongoose')
-var app         = require('./app')
-
-var isLocal  = process.env.APP_ENV === 'local'
-// Render (y la mayoría de PaaS) inyectan su propio PORT en runtime; hay que
-// respetarlo en producción en vez de depender solo de PORT_PRODUCTION...
-var port     = isLocal ? process.env.PORT_LOCAL : (process.env.PORT || process.env.PORT_PRODUCTION)
-var mongoUri = isLocal ? process.env.MONGO_URI_LOCAL : process.env.MONGO_URI_PRODUCTION
-
-if (!mongoUri) {
-    console.error(`[⚑][SERVER] - Falta MONGO_URI_${isLocal ? 'LOCAL' : 'PRODUCTION'} en las variables de entorno (APP_ENV=${process.env.APP_ENV})`)
-    process.exit(1)
-}
-
-// Trim accidental whitespace/newlines and comillas envolventes que a veces quedan
-// al pegar la URI en el panel de variables de entorno del proveedor...
-mongoUri = mongoUri.trim().replace(/^['"]|['"]$/g, '')
-
-if (!/^mongodb(\+srv)?:\/\//.test(mongoUri)) {
-    console.error(`[⚑][SERVER] - MONGO_URI_${isLocal ? 'LOCAL' : 'PRODUCTION'} no tiene un formato válido (debe iniciar con "mongodb://" o "mongodb+srv://"). Revisa que no sea el placeholder de .env.example ni tenga comillas/espacios extra.`)
-    process.exit(1)
-}
-
-// [1] DATABASE CONNECTION PROMISE ONLY...
-mongoose.Promise= global.Promise
-
-// [2] DATABASE CONNECTION (según APP_ENV: local | production)...
-mongoose.connect(mongoUri)
-    .then(()=>{
-        console.log(`[⚑][SERVER] - Conexión a BD (${process.env.APP_ENV}): ok`)
-        app.listen(port,()=>{
-            console.log("[⚑][SERVER] - Corriendo en puerto: "+port)
-        })
-    })
-    .catch(err => console.log(err))
+/**
+ * Punto de entrada histórico (`npm start` → `node index.js`).
+ * Toda la lógica vive en `src/`; este archivo sólo delega para no cambiar
+ * el comando de arranque de Render ni los scripts de package.json.
+ */
+require('./src/server')

@@ -1,52 +1,57 @@
-># MAYLOB [ v1.2 ] - FULL NODE JS BACKEND PROJECT  
->- [⚑] **LOCAL COPY** is used separately to allow local **NPM INIT** and **INSTALL** in a way that local server is up and running for testing...
->- [⚑] [index.js] - Local file is configured to work offline by using **NPM RUN DEV** command on the VS terminal (nodemon, hot-reload). **NPM START** runs plain `node index.js` and is what production/Render uses...
+# MAYLOB [ v2.0 ] — Backend Node.js (Arquitectura limpia)
 
->## UPDATE FROM LOCAL WORKING COPY TO LOCAL GIT REPO
->[⚑] When changes are complete make sure to update according to the following files order:
->1. index.js
->2. app.js
->3. **MODELS**
->4. **CONTROLLERS**
->5. **ROUTES**
+API REST para gestión de clientes, transportistas (operadores y ECOs), rutas y seguimiento de maniobras.
 
->## NOTES 
->- [⚑] Boolean variables **must** be handled lower case...
->- [⚑] Only LOCAL AUX FUNCTIONS have params description...
+## Estructura
 
->## MODO LOCAL vs PRODUCCIÓN
->- [⚑] La configuración vive en `.env` (no se sube a git; usa `.env.example` como plantilla).
->- [⚑] Para alternar de modo solo se cambia una línea en `.env`: `APP_ENV=local` o `APP_ENV=production`.
->- [⚑] **local** → conecta a MongoDB local (`MONGO_URI_LOCAL`, por defecto `mongodb://127.0.0.1:27017/maylobdb`).
->- [⚑] **production** → conecta a MongoDB Atlas (`MONGO_URI_PRODUCTION`).
->- [⚑] En el proveedor donde se despliega "en línea" (Render) hay que configurar en su panel (Environment):
->   - `APP_ENV=production`
->   - `MONGO_URI_PRODUCTION` (connection string de Atlas)
->   - `PORT_PRODUCTION` es opcional: Render inyecta su propio `PORT` en runtime y `index.js` lo usa primero (`process.env.PORT || PORT_PRODUCTION`).
->   - `.env` no viaja con el repo (está en `.gitignore`), así que estas variables **deben** cargarse manualmente en el dashboard de Render.
->- [⚑] `render.yaml` en la raíz define el Blueprint del servicio (build/start command, health check en `/health`). Al conectar el repo en Render vía Blueprint, solo falta rellenar `MONGO_URI_PRODUCTION` (marcada `sync: false`) en el dashboard.
+```
+index.js                      punto de entrada (delegan a src/server.js)
+src/
+  config/env.js               configuración validada (fail-fast)
+  shared/                     errores, logger seguro, ids, reloj
+  domain/                     reglas puras: sanitizers, routeProgress, maneuverTracking
+  application/                casos de uso (auth, clients, routes, transporters, maneuvers)
+  infrastructure/             MongoDB (models, repositories, connection) y JWT
+  interfaces/http/            Express: app, routes, controllers, middleware, validators
+  container.js                composición / inyección de dependencias
+  server.js                   arranque y apagado ordenado
+test/                         pruebas (npm test, sin necesidad de MongoDB)
+docs/
+  GUIA_APRENDIZAJE.md         conceptos y pasos para construir un proyecto así desde cero
+  SEGURIDAD.md                matriz de acceso, controles, cambios para clientes y riesgos
+```
 
->## TO DO
->- Clean obsolete controllers from each file...
->- Make Uniform routes: Remove all prefixes...
->- Create a SCRIPT to auto copy MODELS/CONTROLLERS/ROUTES from local copy to repo copy...
->- Create a cascade controller to update multiple models...
+Regla de dependencias: `interfaces → application → domain`; `infrastructure` implementa lo que
+`application` necesita; sólo `container.js` conoce todas las capas.
 
->## EXTENDED CHANGE LOG:
->>### [ AUXILIARY FUNCTIONS ]
->>- Moved **TIME SNAPSHOT FUNCTION** to be accesible to every controller...
->
->>### [ CLIENT ]
->> **ROUTES** 
->>- Added new route to create and delete a **SINGLE CLIENT**...
->>
->>**CONTROLLERS**
->>- Created controller logic to create and store a new client..
->>- Created controller logic to find and delete a client...
->
->>### [ OPERATOR ]
->> **ROUTES** 
->>- Modified route to read operator...
->>
->>**CONTROLLERS**
->>- Modified logic to be able to read operator by parameter or return all...
+## Comandos
+
+```bash
+npm install
+npm run dev     # nodemon, local
+npm start       # node index.js (producción / Render)
+npm test        # pruebas de dominio y de seguridad HTTP
+```
+
+## Configuración
+
+Copia `.env.example` a `.env`. En **production** son obligatorias `ADMIN_API_KEY`, `JWT_SECRET`
+y `CORS_ORIGINS` (si faltan, el servidor no arranca). En Render, `JWT_SECRET` se genera solo
+(`render.yaml`); el resto se captura en el dashboard.
+
+- `APP_ENV=local` → MongoDB local (`MONGO_URI_LOCAL`). En local, sin `ADMIN_API_KEY`, las rutas admin quedan abiertas (con aviso).
+- `APP_ENV=production` → MongoDB Atlas (`MONGO_URI_PRODUCTION`).
+
+## Autenticación (resumen)
+
+- Administrador / servicios: header `X-API-Key`.
+- Operador: `POST /auth/login {curp}` → `token`; luego `Authorization: Bearer <token>`.
+- Detalle completo y riesgos pendientes: [docs/SEGURIDAD.md](docs/SEGURIDAD.md).
+
+## Aprender / extender
+
+Ver [docs/GUIA_APRENDIZAJE.md](docs/GUIA_APRENDIZAJE.md).
+
+## Notas heredadas
+- Valores booleanos en minúsculas (`'true'`/`'false'` como texto en `man_moni_enable`).
+- La línea de tiempo (`man_events`) y el avance (`man_progress`) se calculan en el servidor a partir de la ruta asignada.
